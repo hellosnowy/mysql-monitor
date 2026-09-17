@@ -1,0 +1,20 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "mysql-monitor",
+  "outputfilename": "mysql-monitor",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "developer",
+    "email": "dev@local"
+  },
+  "info": {
+    "companyName": "OpenSource",
+    "productName": "MySQL Monitor",
+    "productVersion": "1.0.0",
+    "copyright": "Copyright 2026",
+    "comments": "MySQL DDL and DML Monitor and Diff Tool"
+  }
+}

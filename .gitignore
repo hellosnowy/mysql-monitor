@@ -1,0 +1,27 @@
+# Binaries
+bin/
+build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test artifacts
+*.test
+*.out
+
+# Data directory
+data/
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+.vite/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*~
+Thumbs.db
