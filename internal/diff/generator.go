@@ -27,8 +27,22 @@ func GenerateDiffResult(connID, fromVer, toVer string, fromSnap, toSnap *model.S
 	// 1. 运行 DDL 差异比对
 	tableDDLs, ddlSummary := DiffSchemas(fromSchema, toSchema)
 
-	// 2. 运行 DML 差异比对
-	tableDMLs, dmlSummary := DiffData(fromData, toData)
+	// 2. 运行 DML 差异比对。结构快照没有行数据，不能解释为全表清空。
+	var tableDMLs []*model.TableDMLDiff
+	var dmlSummary model.DMLDiffSummary
+	if !isSchemaOnlySnapshot(fromSnap) && !isSchemaOnlySnapshot(toSnap) {
+		// 整表删除由 DDL 处理，避免在 DROP TABLE 之后再生成 DELETE。
+		if fromData != nil && toSchema != nil {
+			filtered := &model.DatabaseData{Tables: make(map[string]*model.TableData)}
+			for name, table := range fromData.Tables {
+				if _, exists := toSchema.Tables[name]; exists {
+					filtered.Tables[name] = table
+				}
+			}
+			fromData = filtered
+		}
+		tableDMLs, dmlSummary = DiffData(fromData, toData)
+	}
 
 	// 3. 构造纯 DDL 脚本
 	var ddlScriptBuilder strings.Builder
@@ -121,4 +135,10 @@ func GenerateDiffResult(connID, fromVer, toVer string, fromSnap, toSnap *model.S
 	res.FullScript = strings.TrimSpace(fullBuilder.String())
 
 	return res
+}
+
+// isSchemaOnlySnapshot 判断快照是否仅保存结构而没有采集行数据。
+func isSchemaOnlySnapshot(snapshot *model.Snapshot) bool {
+	return snapshot != nil && snapshot.Schema != nil && len(snapshot.Schema.Tables) > 0 &&
+		(snapshot.Data == nil || len(snapshot.Data.Tables) == 0)
 }

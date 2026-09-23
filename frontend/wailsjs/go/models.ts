@@ -257,6 +257,8 @@ export namespace model {
 	}
 	
 	
+	
+	
 	export class VersionMeta {
 	    version_id: string;
 	    connection_id: string;

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
 	"time"
@@ -130,7 +131,7 @@ func TestFileStorage_Snapshots(t *testing.T) {
 					ColumnNames:       []string{"id"},
 					Rows: []map[string]interface{}{
 						{"id": int64(1)},
-						{"id": int64(2)},
+						{"id": int64(9007199254740993)},
 					},
 					TotalRows: 2,
 				},
@@ -161,6 +162,9 @@ func TestFileStorage_Snapshots(t *testing.T) {
 	}
 	if len(loaded.Data.Tables["t_user"].Rows) != 2 {
 		t.Errorf("快照行数据不匹配")
+	}
+	if got := loaded.Data.Tables["t_user"].Rows[1]["id"]; got != json.Number("9007199254740993") {
+		t.Errorf("大整数精度丢失: got %v (%T)", got, got)
 	}
 
 	// 删除快照

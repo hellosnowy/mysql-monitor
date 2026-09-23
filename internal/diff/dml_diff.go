@@ -1,6 +1,7 @@
 package diff
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -62,93 +63,82 @@ func DiffData(fromData, toData *model.DatabaseData) ([]*model.TableDMLDiff, mode
 
 // diffSingleTableData 对比单张表在两个版本间的数据行差异
 func diffSingleTableData(tableName string, fromTable, toTable *model.TableData) *model.TableDMLDiff {
-	result := &model.TableDMLDiff{
-		TableName: tableName,
-	}
+	result := &model.TableDMLDiff{TableName: tableName}
 
-	// 确定主键列
 	var pkCols []string
 	if toTable != nil && len(toTable.PrimaryKeyColumns) > 0 {
 		pkCols = toTable.PrimaryKeyColumns
-	} else if fromTable != nil && len(fromTable.PrimaryKeyColumns) > 0 {
+	} else if fromTable != nil {
 		pkCols = fromTable.PrimaryKeyColumns
 	}
+	if fromTable != nil && toTable != nil && !equalStringSlices(fromTable.PrimaryKeyColumns, toTable.PrimaryKeyColumns) {
+		// 主键定义变化时不能用任一版本的主键错误配对，退化为整行比对。
+		pkCols = nil
+	}
 
-	// 构造行索引映射 (rowKey -> rowMap)
-	fromRowsMap := make(map[string]map[string]interface{})
+	// 无主键表按行内容计数，不能用单值 map 吞掉重复行。
+	keyTable := &model.TableData{PrimaryKeyColumns: pkCols}
+	fromRows := make(map[string][]map[string]interface{})
 	if fromTable != nil {
 		for _, row := range fromTable.Rows {
-			key := fromTable.GenerateRowKey(row)
-			fromRowsMap[key] = row
+			key := keyTable.GenerateRowKey(row)
+			fromRows[key] = append(fromRows[key], row)
 		}
 	}
 
-	toRowsMap := make(map[string]map[string]interface{})
+	matched := make(map[string]int, len(fromRows))
+	pkSet := make(map[string]struct{}, len(pkCols))
+	for _, col := range pkCols {
+		pkSet[col] = struct{}{}
+	}
+
 	if toTable != nil {
-		for _, row := range toTable.Rows {
-			key := toTable.GenerateRowKey(row)
-			toRowsMap[key] = row
-		}
-	}
-
-	// 1. 检查新增行 (在 toTable 中但不在 fromTable)
-	if toTable != nil {
-		for _, row := range toTable.Rows {
-			key := toTable.GenerateRowKey(row)
-			if _, exists := fromRowsMap[key]; !exists {
-				// 生成 INSERT 语句
-				stmt := generateInsertStatement(tableName, toTable.ColumnNames, row)
-				result.InsertStatements = append(result.InsertStatements, stmt)
-				result.InsertCount++
-			}
-		}
-	}
-
-	// 2. 检查删除行 (在 fromTable 中但不在 toTable)
-	if fromTable != nil {
-		for _, row := range fromTable.Rows {
-			key := fromTable.GenerateRowKey(row)
-			if _, exists := toRowsMap[key]; !exists {
-				// 生成 DELETE 语句
-				stmt := generateDeleteStatement(tableName, pkCols, fromTable.ColumnNames, row)
-				result.DeleteStatements = append(result.DeleteStatements, stmt)
-				result.DeleteCount++
-			}
-		}
-	}
-
-	// 3. 检查修改行 (两边都存在同一个 rowKey，比对字段值)
-	if toTable != nil && fromTable != nil {
 		for _, toRow := range toTable.Rows {
-			key := toTable.GenerateRowKey(rowKeySource(toTable, toRow))
-			if fromRow, exists := fromRowsMap[key]; exists {
-				changedCols := make(map[string]interface{})
-				for _, col := range toTable.ColumnNames {
-					// 忽略主键列自身
-					if containsString(pkCols, col) {
-						continue
-					}
-					fromVal := fromRow[col]
-					toVal := toRow[col]
-					if !isRowValueEqual(fromVal, toVal) {
-						changedCols[col] = toVal
-					}
-				}
+			key := keyTable.GenerateRowKey(toRow)
+			index := matched[key]
+			if index >= len(fromRows[key]) {
+				result.InsertStatements = append(result.InsertStatements, generateInsertStatement(tableName, toTable.ColumnNames, toRow))
+				result.InsertCount++
+				continue
+			}
 
-				if len(changedCols) > 0 {
-					stmt := generateUpdateStatement(tableName, pkCols, changedCols, toRow)
-					result.UpdateStatements = append(result.UpdateStatements, stmt)
-					result.UpdateCount++
+			fromRow := fromRows[key][index]
+			matched[key] = index + 1
+			if len(pkCols) == 0 {
+				continue
+			}
+
+			changedCols := make(map[string]interface{})
+			for _, col := range toTable.ColumnNames {
+				if _, isPK := pkSet[col]; isPK {
+					continue
+				}
+				if !isRowValueEqual(fromRow[col], toRow[col]) {
+					changedCols[col] = toRow[col]
 				}
 			}
+			if len(changedCols) > 0 {
+				result.UpdateStatements = append(result.UpdateStatements, generateUpdateStatement(tableName, pkCols, changedCols, toRow))
+				result.UpdateCount++
+			}
+		}
+	}
+
+	// 按来源快照顺序输出 DELETE，保持脚本可重复生成。
+	if fromTable != nil {
+		used := make(map[string]int, len(matched))
+		for _, row := range fromTable.Rows {
+			key := keyTable.GenerateRowKey(row)
+			if used[key] < matched[key] {
+				used[key]++
+				continue
+			}
+			result.DeleteStatements = append(result.DeleteStatements, generateDeleteStatement(tableName, pkCols, fromTable.ColumnNames, row))
+			result.DeleteCount++
 		}
 	}
 
 	return result
-}
-
-func rowKeySource(t *model.TableData, row map[string]interface{}) map[string]interface{} {
-	return row
 }
 
 // generateInsertStatement 生成单行 INSERT 语句
@@ -197,9 +187,14 @@ func generateDeleteStatement(tableName string, pkCols []string, allCols []string
 		}
 	}
 
-	return fmt.Sprintf("DELETE FROM %s WHERE %s;",
+	statement := fmt.Sprintf("DELETE FROM %s WHERE %s",
 		sqlutil.EscapeIdentifier(tableName),
 		strings.Join(whereConditions, " AND "))
+	if len(pkCols) == 0 {
+		// 无主键表可能有重复行，每条差异只删除一行。
+		statement += " LIMIT 1"
+	}
+	return statement + ";"
 }
 
 // generateUpdateStatement 生成单行 UPDATE 语句
@@ -255,16 +250,11 @@ func isRowValueEqual(v1, v2 interface{}) bool {
 	if v1 == nil || v2 == nil {
 		return false
 	}
-	// 字符串比较
-	return fmt.Sprintf("%v", v1) == fmt.Sprintf("%v", v2)
-}
-
-// containsString 判断切片中是否包含某字符串
-func containsString(slice []string, target string) bool {
-	for _, s := range slice {
-		if s == target {
-			return true
-		}
+	// 与行键使用同一规范，区分数字、字符串、NULL 等值。
+	left, leftErr := json.Marshal(v1)
+	right, rightErr := json.Marshal(v2)
+	if leftErr == nil && rightErr == nil {
+		return string(left) == string(right)
 	}
-	return false
+	return fmt.Sprintf("%T:%#v", v1, v1) == fmt.Sprintf("%T:%#v", v2, v2)
 }

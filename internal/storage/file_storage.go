@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -301,7 +302,10 @@ func (s *FileStorage) GetSnapshot(connID, versionID string) (*model.Snapshot, er
 		return nil, fmt.Errorf("读取快照行数据失败: %w", err)
 	}
 	var dbData model.DatabaseData
-	if err := json.Unmarshal(dataBytes, &dbData); err != nil {
+	// 使用 json.Number 保留 BIGINT/DECIMAL 原始精度，避免 float64 舍入后生成错误 SQL。
+	decoder := json.NewDecoder(bytes.NewReader(dataBytes))
+	decoder.UseNumber()
+	if err := decoder.Decode(&dbData); err != nil {
 		return nil, fmt.Errorf("解析快照行数据失败: %w", err)
 	}
 

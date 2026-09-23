@@ -3,9 +3,9 @@ package model
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"sort"
-	"strings"
 )
 
 // TableData 单个数据表的数据行快照
@@ -25,16 +25,16 @@ type TableData struct {
 // GenerateRowKey 根据主键列计算单行数据的唯一标识 Key；若无主键则计算全列哈希
 func (t *TableData) GenerateRowKey(row map[string]interface{}) string {
 	if len(t.PrimaryKeyColumns) > 0 {
-		var parts []string
+		parts := make([]interface{}, 0, len(t.PrimaryKeyColumns))
 		for _, pkCol := range t.PrimaryKeyColumns {
-			val := row[pkCol]
-			if val == nil {
-				parts = append(parts, "<NULL>")
-			} else {
-				parts = append(parts, fmt.Sprintf("%v", val))
-			}
+			parts = append(parts, row[pkCol])
 		}
-		return strings.Join(parts, "__PK_SEP__")
+		// JSON 编码保留值类型和边界，避免复合主键拼接碰撞。
+		encoded, err := json.Marshal(parts)
+		if err == nil {
+			return "pk:" + string(encoded)
+		}
+		return fmt.Sprintf("pk:%#v", parts)
 	}
 
 	// 无主键表：按列名排序后计算整行所有字段值的 SHA256 哈希作为唯一键
@@ -44,17 +44,16 @@ func (t *TableData) GenerateRowKey(row map[string]interface{}) string {
 	}
 	sort.Strings(keys)
 
-	var sb strings.Builder
+	parts := make([]interface{}, 0, len(keys)*2)
 	for _, k := range keys {
-		val := row[k]
-		if val == nil {
-			sb.WriteString(fmt.Sprintf("%s:<NULL>;", k))
-		} else {
-			sb.WriteString(fmt.Sprintf("%s:%v;", k, val))
-		}
+		parts = append(parts, k, row[k])
 	}
-	hash := sha256.Sum256([]byte(sb.String()))
-	return hex.EncodeToString(hash[:])
+	encoded, err := json.Marshal(parts)
+	if err != nil {
+		encoded = []byte(fmt.Sprintf("%#v", parts))
+	}
+	hash := sha256.Sum256(encoded)
+	return "row:" + hex.EncodeToString(hash[:])
 }
 
 // DatabaseData 数据库层面的数据快照汇总

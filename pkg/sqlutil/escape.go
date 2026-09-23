@@ -2,6 +2,7 @@ package sqlutil
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -52,6 +53,12 @@ func FormatSQLValue(val interface{}) string {
 	}
 
 	switch v := val.(type) {
+	case json.Number:
+		encoded, err := json.Marshal(v)
+		if err != nil {
+			return EscapeStringLiteral(v.String())
+		}
+		return string(encoded)
 	case string:
 		return EscapeStringLiteral(v)
 	case []byte:
