@@ -7,8 +7,8 @@
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
   "author": {
-    "name": "developer",
-    "email": "dev@local"
+    "name": "snowy",
+    "email": ""
   },
   "info": {
     "companyName": "OpenSource",
