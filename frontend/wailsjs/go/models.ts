@@ -1,3 +1,76 @@
+export namespace dialect {
+	
+	export class Capabilities {
+	    schema_namespace: boolean;
+	    identity_insert: boolean;
+	    transactional_ddl: boolean;
+	    table_comments: boolean;
+	    column_comments: boolean;
+	    partial_indexes: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Capabilities(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.schema_namespace = source["schema_namespace"];
+	        this.identity_insert = source["identity_insert"];
+	        this.transactional_ddl = source["transactional_ddl"];
+	        this.table_comments = source["table_comments"];
+	        this.column_comments = source["column_comments"];
+	        this.partial_indexes = source["partial_indexes"];
+	    }
+	}
+	export class DriverInfo {
+	    vendor: string;
+	    display_name: string;
+	    driver_package: string;
+	    driver_version: string;
+	    built_in: boolean;
+	    default_port: number;
+	    default_schema: string;
+	    supports_schemas: boolean;
+	    capabilities: Capabilities;
+	
+	    static createFrom(source: any = {}) {
+	        return new DriverInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.vendor = source["vendor"];
+	        this.display_name = source["display_name"];
+	        this.driver_package = source["driver_package"];
+	        this.driver_version = source["driver_version"];
+	        this.built_in = source["built_in"];
+	        this.default_port = source["default_port"];
+	        this.default_schema = source["default_schema"];
+	        this.supports_schemas = source["supports_schemas"];
+	        this.capabilities = this.convertValues(source["capabilities"], Capabilities);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace model {
 	
 	export class TableFilterConfig {
@@ -21,12 +94,16 @@ export namespace model {
 	export class ConnectionConfig {
 	    id: string;
 	    name: string;
+	    vendor?: string;
 	    host: string;
 	    port: number;
 	    user: string;
 	    password: string;
 	    database: string;
-	    charset: string;
+	    schema?: string;
+	    charset?: string;
+	    ssl_mode?: string;
+	    options?: Record<string, string>;
 	    timeout_seconds: number;
 	    filter: TableFilterConfig;
 	    // Go type: time
@@ -42,12 +119,16 @@ export namespace model {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.name = source["name"];
+	        this.vendor = source["vendor"];
 	        this.host = source["host"];
 	        this.port = source["port"];
 	        this.user = source["user"];
 	        this.password = source["password"];
 	        this.database = source["database"];
+	        this.schema = source["schema"];
 	        this.charset = source["charset"];
+	        this.ssl_mode = source["ssl_mode"];
+	        this.options = source["options"];
 	        this.timeout_seconds = source["timeout_seconds"];
 	        this.filter = this.convertValues(source["filter"], TableFilterConfig);
 	        this.created_at = this.convertValues(source["created_at"], null);
@@ -208,6 +289,8 @@ export namespace model {
 	}
 	export class DiffResult {
 	    connection_id: string;
+	    vendor?: string;
+	    direction?: string;
 	    from_version_id: string;
 	    to_version_id: string;
 	    // Go type: time
@@ -226,6 +309,8 @@ export namespace model {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.connection_id = source["connection_id"];
+	        this.vendor = source["vendor"];
+	        this.direction = source["direction"];
 	        this.from_version_id = source["from_version_id"];
 	        this.to_version_id = source["to_version_id"];
 	        this.compared_at = this.convertValues(source["compared_at"], null);
@@ -262,7 +347,10 @@ export namespace model {
 	export class VersionMeta {
 	    version_id: string;
 	    connection_id: string;
+	    vendor?: string;
 	    database_name: string;
+	    schema?: string;
+	    format_version?: number;
 	    is_baseline: boolean;
 	    description: string;
 	    table_count: number;
@@ -278,7 +366,10 @@ export namespace model {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.version_id = source["version_id"];
 	        this.connection_id = source["connection_id"];
+	        this.vendor = source["vendor"];
 	        this.database_name = source["database_name"];
+	        this.schema = source["schema"];
+	        this.format_version = source["format_version"];
 	        this.is_baseline = source["is_baseline"];
 	        this.description = source["description"];
 	        this.table_count = source["table_count"];

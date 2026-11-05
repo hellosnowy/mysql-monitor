@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"mysql-monitor/internal/model"
+	"sql-monitor/internal/model"
 )
 
 // EscapeIdentifier 对 MySQL 标识符（表名、列名、索引名等）添加反引号包裹并转义内部反引号

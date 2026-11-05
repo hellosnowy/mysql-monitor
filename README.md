@@ -1,67 +1,85 @@
-# MySQL Monitor (DDL & DML 监控与版本比对工具)
+# SQL Monitor (多数据库 DDL & DML 监控与版本比对工具)
 
-基于 **Golang** 与 **Wails v2** 构建的跨平台桌面应用，用于监控 MySQL 数据库结构 (DDL) 与数据 (DML) 变动、捕获历史版本基线 (Baseline)，并支持在任意两个历史版本之间进行智能差异比对与 SQL 脚本导出。
+基于 **Golang** 与 **Wails v2** 构建的跨平台桌面应用，用于监控 **MySQL、PostgreSQL、SQL Server** 数据库结构 (DDL) 与数据 (DML) 变动、捕获历史版本基线 (Baseline)，并支持在任意两个历史版本之间生成 **升级** 或 **回滚** SQL 脚本。
 
 ---
 
 ## 核心特性
 
 1. **多数据库连接管理**
-   - 支持添加、修改、测试与删除多个 MySQL 数据源配置。
-   - 实时连通性探测（包含延迟测速与 MySQL 服务端版本检测）。
-   - 零 CGO 依赖，纯 Go 跨平台支持。
+   - 支持 MySQL / PostgreSQL / SQL Server，内置三家纯 Go 驱动（零 CGO）。
+   - 连接配置可选择厂商、目标数据库与 Schema/模式（PostgreSQL 默认 `public`，SQL Server 默认 `dbo`）。
+   - 支持从服务端加载 Schema 列表；实时连通性探测（延迟 + 服务端版本）。
+   - 老版本 `mysql-monitor` 的 `./data` 配置与快照可直接读取，缺失厂商字段自动按 MySQL 兼容。
 
-2. **灵活的表黑白名单过滤**
-   - **白名单 (IncludeTables)**：支持精确表名 (`t_user`)、Glob 通配符 (`t_order_*`) 与正则表达式 (`^tbl_\d+$`)。
-   - **黑名单 (ExcludeTables)**：优先级高于白名单，命中即排除（如 `*_bak`, `tmp_*`）。
-   - **监控模式选择**：支持 `结构与数据全量监控 (DDL + DML)` 或 `仅监控表结构 (DDL)`。
-   - **大表防护**：支持针对单表设置最大抓取行数限制。
+2. **方言插件架构**
+   - `internal/dialect` 定义统一的 `Plugin` 接口：连接、读取快照、比对、生成 SQL。
+   - `internal/dialect/{mysql,postgres,sqlserver}` 各自实现元数据提取与 SQL 发射。
+   - `internal/diff` 只负责“改了什么”，SQL 语法由各方言的 `sqlgen.Emitter` 决定。
 
 3. **基准版本 (Baseline) 与历史快照**
-   - **智能基准确立**：若当前库历史版本为空，首次拉取自动确立为【基准版本 (Baseline)】。
-   - 支持后续手动指定或覆盖新基准版本。
-   - 包含表结构 (`information_schema` + `SHOW CREATE TABLE`) 与行数据快照。
+   - 首次抓取自动确立基准版本，后续可手动指定。
+   - 快照包含表结构、索引、主键、注释与行数据；版本号精确到毫秒且禁止覆盖已有版本。
 
-4. **任意两历史版本双向比对与 SQL 生成**
-   - **DDL 差异比对**：
-     - 新建表 (`CREATE TABLE`) 与删除表 (`DROP TABLE IF EXISTS`)。
-     - 字段变更：新增字段 (`ADD COLUMN ... AFTER ...`)、删除字段 (`DROP COLUMN`)、修改字段 (`MODIFY COLUMN`)。
-     - 索引变动：新增索引、删除索引、主键变更 (`DROP PRIMARY KEY, ADD PRIMARY KEY`)。
-     - 存储引擎及注释更新。
-   - **DML 差异比对**：
-     - 有主键时按主键对齐行；无主键时按整行内容和重复次数比对。
-     - 无主键重复行的删除语句使用 MySQL `LIMIT 1`，每次只删除一行。
-     - 自动生成 `INSERT INTO ...`、`DELETE FROM ... WHERE ...` 及 `UPDATE ... SET ... WHERE ...`。
-     - 完善的字符转义、NULL 处理与二进制/十六进制输出。
-   - **SQL 导出与事务保护**：
-     - 生成带有 `START TRANSACTION; ... COMMIT;` 以及 `FOREIGN_KEY_CHECKS` 保护的完整同步脚本。
-     - 支持界面一键复制与系统原生对话框导出为 `.sql` 文件。
+4. **升级 / 回滚双向比对**
+   - **升级 (From → To)**：生成由起始版本升级到目标版本的增量 SQL。
+   - **回滚 (To → From)**：生理由目标版本回滚到起始版本的 SQL。
+   - DDL：建表/删表、字段增删改、主键与索引变更、表/列注释。
+   - DML：有主键按主键对齐，无主键按整行内容与重复次数比对；生成 INSERT/UPDATE/DELETE。
+   - 完整脚本按方言包裹事务：MySQL `START TRANSACTION`、PostgreSQL `BEGIN/COMMIT`、SQL Server `SET XACT_ABORT ON + BEGIN TRANSACTION`。
+   - 支持界面复制与原生对话框导出 `.sql`。
+
+---
+
+## 支持矩阵与已知限制
+
+| 能力 | MySQL | PostgreSQL | SQL Server |
+| --- | --- | --- | --- |
+| 连接 / 版本探测 | ✅ | ✅ | ✅ |
+| Schema 选择 | 数据库名即 schema | ✅ `public` 等 | ✅ `dbo` 等 |
+| 表/字段/主键/索引快照 | ✅ | ✅ | ✅ |
+| 原生建表语句 | ✅ `SHOW CREATE TABLE` | 由元数据重建 | 由元数据重建 |
+| 列位置保持 (`FIRST/AFTER`) | ✅ | 仅追加 | 仅追加 |
+| Identity/自增插入 | 普通 INSERT | `OVERRIDING SYSTEM VALUE` | `SET IDENTITY_INSERT` |
+| 无主键重复行删除 | `LIMIT 1` | `ctid` 子查询 | `DELETE TOP (1)` |
+| 外键 / 视图 / 存储过程 / 触发器 | ❌ | ❌ | ❌ |
+
+- 本次不建模外键、视图、存储过程、触发器、序列状态、枚举/自定义类型与分区表；含外键的库可能需要手工调整脚本执行顺序。
+- PostgreSQL 的 `serial` 列在建表时按 `serial/bigserial` 重建；其他默认值保留表达式。
+- SQL Server 修改默认约束依赖快照中记录的约束名；老快照缺失时会退化为匿名 `ADD DEFAULT`。
+- 显式插入 identity/sequence 值后，序列计数器不会自动推进。
+- 跨方言快照不可互相比较；已有历史快照的连接禁止修改厂商。
 
 ---
 
 ## 目录架构
 
 ```
-mysql-monitor/
-├── main.go                  # Wails 桌面应用入口（嵌入前端 dist）
-├── app.go                   # Wails 前后端桥接服务（供前端调用的 Go API）
-├── wails.json               # Wails 项目配置文件
+sql-monitor/
+├── main.go                       # Wails 桌面应用入口（嵌入前端 dist）
+├── app.go                        # Wails 前后端桥接服务
+├── wails.json                    # Wails 项目配置
 ├── internal/
-│   ├── model/               # 领域实体模型 (连接、结构、数据、快照、差异)
-│   ├── filter/              # 表黑白名单过滤器
-│   ├── db/                  # MySQL 客户端、元数据与数据抽取器
-│   ├── storage/             # 本地结构化快照持久化仓储
-│   ├── diff/                # DDL 与 DML 核心比对与 SQL 生成引擎
-│   └── service/             # 业务编排服务
+│   ├── model/                    # 领域模型 + 老版本数据归一化
+│   ├── sqlgen/                   # 方言 SQL 发射接口
+│   ├── diff/                     # 与方言无关的 DDL/DML 比对引擎
+│   ├── dialect/
+│   │   ├── dialect.go            # Plugin 接口、注册表与通用抓取/比对流程
+│   │   ├── builtin/              # 内置方言注册（组合根）
+│   │   ├── mysql/                # MySQL 方言插件
+│   │   ├── postgres/             # PostgreSQL 方言插件
+│   │   └── sqlserver/            # SQL Server 方言插件
+│   ├── db/                       # 跨方言 rows.Scan 辅助
+│   ├── filter/                   # 表黑白名单过滤器
+│   ├── storage/                  # 本地快照持久化（兼容老格式）
+│   └── service/                  # 业务编排
 ├── pkg/
-│   └── sqlutil/             # SQL 转义、字符串与主键处理工具
-└── frontend/                # Vue 3 + Vite 现代化前端工程
-    ├── src/
-    │   ├── App.vue          # 主页面（连接管理、快照管理、差异比对）
-    │   ├── api.js           # Wails Go 方法调用封装
-    │   └── style.css        # 样式定义
-    ├── package.json
-    └── vite.config.js
+│   ├── crypto/                   # 连接密码 AES 加密
+│   └── sqlutil/                  # MySQL 转义/字面量工具
+└── frontend/                     # Vue 3 + Vite
+    └── src/
+        ├── App.vue               # 连接 / 快照 / 比对界面
+        └── api.js                # Wails 调用封装（含浏览器 Mock）
 ```
 
 ---
@@ -69,37 +87,39 @@ mysql-monitor/
 ## 构建与运行
 
 ### 1. 前提环境
-- Go 1.20+（已在 Go 1.22 验证）
+- Go 1.25+
 - Node.js 18+ 与 npm
+- （可选）Wails CLI：`go install github.com/wailsapp/wails/v2/cmd/wails@latest`
 
 ### 2. 本地开发
 ```bash
-# 1. 运行前端开发服务（可选单独调试）
 cd frontend
 npm install
 npm run dev
+```
 
-# 2. 或使用 Wails 开发模式（前后端热重载）
+或使用 Wails 开发模式（前后端热重载）：
+```bash
 wails dev
 ```
 
-### 3. 编译打包独立可执行文件
-推荐使用官方 Wails CLI 构建（自动处理 Windows Manifest、图标与生产构建标签）：
+### 3. 编译打包
 ```bash
-# 执行完整打包构建（产物位于 build/bin/mysql-monitor.exe 及 bin/mysql-monitor.exe）
 wails build
 ```
 
-或使用标准 Go 工具链手动编译（注意必须指定 `-tags "production"`）：
+或使用标准 Go 工具链（必须指定 `-tags "production"`）：
 ```bash
-# 1. 构建前端资源
 cd frontend && npm run build && cd ..
-
-# 2. 编译生产二进制 (windowsgui 隐藏后台命令行黑色窗口)
-go build -tags "production" -ldflags "-H windowsgui -s -w" -o bin/mysql-monitor.exe .
+go build -tags "production" -ldflags "-H windowsgui -s -w" -o bin/sql-monitor.exe .
 ```
 
 ### 4. 运行单元测试
 ```bash
-go test -v ./...
+go test ./...
 ```
+
+### 5. 数据目录与升级
+- 数据仍保存在程序工作目录下的 `./data`（`configs/connections.json`、`snapshots/<connID>/<version>/`）。
+- 从 `mysql-monitor` 升级时，将 `sql-monitor.exe` 放到原目录运行即可；旧配置与快照无需迁移，读取时自动补 `vendor=mysql`。
+- 数据目录包含加密密钥 `.secret_key`，请勿删除，否则已保存的密码无法解密。

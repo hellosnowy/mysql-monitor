@@ -5,28 +5,39 @@ import (
 	"fmt"
 	"time"
 
-	"mysql-monitor/internal/db"
-	"mysql-monitor/internal/diff"
-	"mysql-monitor/internal/filter"
-	"mysql-monitor/internal/model"
-	"mysql-monitor/internal/storage"
+	"sql-monitor/internal/dialect"
+	"sql-monitor/internal/filter"
+	"sql-monitor/internal/model"
+	"sql-monitor/internal/storage"
 )
 
 // MonitorService 聚合业务编排服务
 type MonitorService struct {
-	storage storage.Storage
+	storage  storage.Storage
+	registry *dialect.Registry
 }
 
 // NewMonitorService 创建业务服务实例
-func NewMonitorService(s storage.Storage) *MonitorService {
+func NewMonitorService(s storage.Storage, registry *dialect.Registry) *MonitorService {
 	return &MonitorService{
-		storage: s,
+		storage:  s,
+		registry: registry,
 	}
+}
+
+// Vendors 返回所有内置数据库方言
+func (s *MonitorService) Vendors() []dialect.DriverInfo {
+	return s.registry.List()
 }
 
 // SaveConnection 保存或更新数据库连接
 func (s *MonitorService) SaveConnection(cfg model.ConnectionConfig) error {
-	if err := cfg.Validate(); err != nil {
+	cfg.Normalize()
+	p, err := s.registry.Get(cfg.Vendor)
+	if err != nil {
+		return err
+	}
+	if err := p.Validate(&cfg); err != nil {
 		return err
 	}
 	return s.storage.SaveConnection(cfg)
@@ -39,7 +50,14 @@ func (s *MonitorService) GetConnection(id string) (*model.ConnectionConfig, erro
 
 // ListConnections 获取所有保存的数据库连接
 func (s *MonitorService) ListConnections() ([]model.ConnectionConfig, error) {
-	return s.storage.ListConnections()
+	conns, err := s.storage.ListConnections()
+	if err != nil {
+		return nil, err
+	}
+	for i := range conns {
+		conns[i].Normalize()
+	}
+	return conns, nil
 }
 
 // DeleteConnection 删除数据库连接
@@ -47,9 +65,30 @@ func (s *MonitorService) DeleteConnection(id string) error {
 	return s.storage.DeleteConnection(id)
 }
 
-// TestConnection 测试连接连通性并返回 MySQL 版本与延迟
+// TestConnection 测试连接连通性并返回服务端版本与延迟
 func (s *MonitorService) TestConnection(cfg model.ConnectionConfig) (*model.ConnectionTestResult, error) {
-	return db.TestConnection(&cfg)
+	cfg.Normalize()
+	p, err := s.registry.Get(cfg.Vendor)
+	if err != nil {
+		return nil, err
+	}
+	if err := p.Validate(&cfg); err != nil {
+		return &model.ConnectionTestResult{Success: false, Message: err.Error()}, nil
+	}
+	return p.TestConnection(context.Background(), &cfg)
+}
+
+// ListSchemas 列出指定连接可用的数据库模式
+func (s *MonitorService) ListSchemas(cfg model.ConnectionConfig) ([]string, error) {
+	cfg.Normalize()
+	p, err := s.registry.Get(cfg.Vendor)
+	if err != nil {
+		return nil, err
+	}
+	if err := p.Validate(&cfg); err != nil {
+		return nil, err
+	}
+	return p.ListSchemas(context.Background(), &cfg)
 }
 
 // CaptureSnapshot 抓取指定数据库的当前结构和数据快照
@@ -58,6 +97,12 @@ func (s *MonitorService) CaptureSnapshot(ctx context.Context, connID string, for
 	cfg, err := s.storage.GetConnection(connID)
 	if err != nil {
 		return nil, fmt.Errorf("找不到连接配置: %w", err)
+	}
+	cfg.Normalize()
+
+	p, err := s.registry.Get(cfg.Vendor)
+	if err != nil {
+		return nil, err
 	}
 
 	// 1. 判断是否设为基准版本
@@ -68,38 +113,19 @@ func (s *MonitorService) CaptureSnapshot(ctx context.Context, connID string, for
 
 	isBaseline := forceBaseline
 	if !hasExisting {
-		// 历史版本为空时，自动标记为基准版本
 		isBaseline = true
 		if description == "" {
 			description = "初始基准版本 (Baseline)"
 		}
 	}
 
-	// 2. 连接目标 MySQL
-	client, err := db.NewClient(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("连接目标数据库失败: %w", err)
-	}
-	defer client.Close()
-
-	// 3. 构建表过滤器
+	// 2. 由方言插件完成连接、结构提取与数据提取
 	tableFilter := filter.NewTableFilter(cfg.Filter)
-
-	// 4. 提取表结构 (DDL)
-	schemaExtractor := db.NewSchemaExtractor(client.DB(), cfg.Database, tableFilter)
-	schema, err := schemaExtractor.ExtractDatabaseSchema(ctx)
+	schema, data, err := p.Capture(ctx, cfg, tableFilter)
 	if err != nil {
-		return nil, fmt.Errorf("抓取表结构失败: %w", err)
+		return nil, err
 	}
 
-	// 5. 提取表数据 (DML)
-	dataExtractor := db.NewDataExtractor(client.DB(), cfg.Database, cfg.Filter)
-	data, err := dataExtractor.ExtractDatabaseData(ctx, schema)
-	if err != nil {
-		return nil, fmt.Errorf("抓取表数据快照失败: %w", err)
-	}
-
-	// 统计数据总量
 	totalRows := 0
 	if data != nil {
 		for _, tData := range data.Tables {
@@ -107,17 +133,21 @@ func (s *MonitorService) CaptureSnapshot(ctx context.Context, connID string, for
 		}
 	}
 
-	// 6. 生成版本号并持久化
-	versionID := fmt.Sprintf("v%s", time.Now().Format("20060102_150405"))
+	// 3. 生成版本号并持久化
+	now := time.Now()
+	versionID := fmt.Sprintf("v%s_%03d", now.Format("20060102_150405"), now.Nanosecond()/int(time.Millisecond))
 	meta := model.VersionMeta{
-		VersionID:    versionID,
-		ConnectionID: connID,
-		DatabaseName: cfg.Database,
-		IsBaseline:   isBaseline,
-		Description:  description,
-		TableCount:   len(schema.Tables),
-		RowCount:     totalRows,
-		CreatedAt:    time.Now(),
+		VersionID:     versionID,
+		ConnectionID:  connID,
+		Vendor:        cfg.Vendor,
+		DatabaseName:  cfg.Database,
+		Schema:        cfg.EffectiveSchema(),
+		FormatVersion: model.SnapshotFormatVersion,
+		IsBaseline:    isBaseline,
+		Description:   description,
+		TableCount:    len(schema.Tables),
+		RowCount:      totalRows,
+		CreatedAt:     now,
 	}
 
 	snapshot := &model.Snapshot{
@@ -125,7 +155,6 @@ func (s *MonitorService) CaptureSnapshot(ctx context.Context, connID string, for
 		Schema: schema,
 		Data:   data,
 	}
-
 	if err := s.storage.SaveSnapshot(snapshot); err != nil {
 		return nil, fmt.Errorf("保存快照失败: %w", err)
 	}
@@ -148,8 +177,9 @@ func (s *MonitorService) DeleteSnapshot(connID, versionID string) error {
 	return s.storage.DeleteSnapshot(connID, versionID)
 }
 
-// CompareVersions 比较历史版本中任意两个版本的差异，生成 DDL 与 DML SQL 脚本
-func (s *MonitorService) CompareVersions(connID, fromVersionID, toVersionID string) (*model.DiffResult, error) {
+// CompareVersions 比较历史版本中任意两个版本的差异，生成 DDL 与 DML SQL 脚本。
+// direction 为 rollback 时生成由目标版本回滚到起始版本的 SQL。
+func (s *MonitorService) CompareVersions(connID, fromVersionID, toVersionID string, direction model.DiffDirection) (*model.DiffResult, error) {
 	if fromVersionID == "" || toVersionID == "" {
 		return nil, fmt.Errorf("起始版本和目标版本均不能为空")
 	}
@@ -158,12 +188,30 @@ func (s *MonitorService) CompareVersions(connID, fromVersionID, toVersionID stri
 	if err != nil {
 		return nil, fmt.Errorf("读取起始版本快照失败: %w", err)
 	}
-
 	toSnap, err := s.storage.GetSnapshot(connID, toVersionID)
 	if err != nil {
 		return nil, fmt.Errorf("读取目标版本快照失败: %w", err)
 	}
+	fromSnap.Normalize()
+	toSnap.Normalize()
 
-	result := diff.GenerateDiffResult(connID, fromVersionID, toVersionID, fromSnap, toSnap)
-	return result, nil
+	vendor := fromSnap.Meta.Vendor
+	if vendor == "" {
+		vendor = toSnap.Meta.Vendor
+	}
+	if vendor == "" {
+		if cfg, cfgErr := s.storage.GetConnection(connID); cfgErr == nil {
+			vendor = cfg.Vendor
+		}
+	}
+	vendor = model.NormalizeVendor(vendor)
+	if toSnap.Meta.Vendor != "" && toSnap.Meta.Vendor != vendor {
+		return nil, fmt.Errorf("两个快照的数据库类型不一致: %s 与 %s", vendor.DisplayName(), toSnap.Meta.Vendor.DisplayName())
+	}
+
+	p, err := s.registry.Get(vendor)
+	if err != nil {
+		return nil, err
+	}
+	return p.Compare(fromSnap, toSnap, model.NormalizeDirection(direction))
 }

@@ -3,7 +3,7 @@ package filter
 import (
 	"testing"
 
-	"mysql-monitor/internal/model"
+	"sql-monitor/internal/model"
 )
 
 func TestTableFilter(t *testing.T) {

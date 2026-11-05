@@ -6,8 +6,8 @@ export function CaptureSnapshot(arg1, arg2, arg3) {
   return window['go']['main']['App']['CaptureSnapshot'](arg1, arg2, arg3);
 }
 
-export function CompareVersions(arg1, arg2, arg3) {
-  return window['go']['main']['App']['CompareVersions'](arg1, arg2, arg3);
+export function CompareVersions(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['CompareVersions'](arg1, arg2, arg3, arg4);
 }
 
 export function DeleteConnection(arg1) {
@@ -24,6 +24,14 @@ export function ExportSQLFile(arg1, arg2) {
 
 export function GetConnections() {
   return window['go']['main']['App']['GetConnections']();
+}
+
+export function GetVendors() {
+  return window['go']['main']['App']['GetVendors']();
+}
+
+export function ListSchemas(arg1) {
+  return window['go']['main']['App']['ListSchemas'](arg1);
 }
 
 export function ListSnapshots(arg1) {

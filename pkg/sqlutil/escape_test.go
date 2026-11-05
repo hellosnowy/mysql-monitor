@@ -3,7 +3,7 @@ package sqlutil
 import (
 	"testing"
 
-	"mysql-monitor/internal/model"
+	"sql-monitor/internal/model"
 )
 
 func TestEscapeIdentifier(t *testing.T) {

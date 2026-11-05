@@ -12,6 +12,53 @@ const hasWails = () => {
   );
 };
 
+export async function getVendors() {
+  if (hasWails()) {
+    return (await window.go.main.App.GetVendors()) || []
+  }
+  return [
+    {
+      vendor: "mysql",
+      display_name: "MySQL",
+      driver_package: "github.com/go-sql-driver/mysql",
+      driver_version: "v1.8.1",
+      built_in: true,
+      default_port: 3306,
+      default_schema: "",
+      supports_schemas: false,
+    },
+    {
+      vendor: "postgres",
+      display_name: "PostgreSQL",
+      driver_package: "github.com/jackc/pgx/v5",
+      driver_version: "v5.12.0",
+      built_in: true,
+      default_port: 5432,
+      default_schema: "public",
+      supports_schemas: true,
+    },
+    {
+      vendor: "sqlserver",
+      display_name: "SQL Server",
+      driver_package: "github.com/microsoft/go-mssqldb",
+      driver_version: "v1.11.2",
+      built_in: true,
+      default_port: 1433,
+      default_schema: "dbo",
+      supports_schemas: true,
+    },
+  ]
+}
+
+export async function listSchemas(cfg) {
+  if (hasWails()) {
+    return (await window.go.main.App.ListSchemas(cfg)) || []
+  }
+  if (cfg && cfg.vendor === "postgres") return ["public", "app"]
+  if (cfg && cfg.vendor === "sqlserver") return ["dbo", "app"]
+  return ["testdb"]
+}
+
 export async function getConnections() {
   if (hasWails()) {
     const res = await window.go.main.App.GetConnections();
@@ -51,10 +98,15 @@ export async function testConnection(cfg) {
     return await window.go.main.App.TestConnection(cfg);
   }
   // 浏览器 Mock 演示
+  const versionMap = {
+    mysql: "8.0.32-MySQL Community Server",
+    postgres: "PostgreSQL 16.3",
+    sqlserver: "Microsoft SQL Server 2022",
+  }
   return {
     success: true,
     message: "连接成功 (Mock 浏览器模式)",
-    server_version: "8.0.32-MySQL Community Server",
+    server_version: versionMap[cfg && cfg.vendor] || versionMap.mysql,
     latency_ms: 18,
   };
 }
@@ -107,17 +159,20 @@ export async function deleteSnapshot(connID, versionID) {
   return null;
 }
 
-export async function compareVersions(connID, fromVersionID, toVersionID) {
+export async function compareVersions(connID, fromVersionID, toVersionID, direction = "upgrade") {
   if (hasWails()) {
     return await window.go.main.App.CompareVersions(
       connID,
       fromVersionID,
       toVersionID,
+      direction,
     );
   }
   // 浏览器 Mock 演示数据
   return {
     connection_id: connID,
+    vendor: "mysql",
+    direction,
     from_version_id: fromVersionID,
     to_version_id: toVersionID,
     compared_at: new Date().toISOString(),

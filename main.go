@@ -22,7 +22,7 @@ func main() {
 
 	// 运行 Wails 原生桌面应用
 	err = wails.Run(&options.App{
-		Title:     "MySQL Monitor - DDL & DML 监控比对工具",
+		Title:     "SQL Monitor - 多数据库 DDL & DML 监控比对工具",
 		Width:     1280,
 		Height:    820,
 		MinWidth:  1024,

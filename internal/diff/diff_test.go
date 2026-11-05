@@ -1,10 +1,12 @@
-package diff
+package diff_test
 
 import (
 	"strings"
 	"testing"
 
-	"mysql-monitor/internal/model"
+	"sql-monitor/internal/dialect/mysql"
+	"sql-monitor/internal/diff"
+	"sql-monitor/internal/model"
 )
 
 func TestDDLDiff(t *testing.T) {
@@ -18,23 +20,23 @@ func TestDDLDiff(t *testing.T) {
 				Engine: "InnoDB",
 				Columns: []*model.ColumnSchema{
 					{
-						Name:          "id",
+						Name:            "id",
 						OrdinalPosition: 1,
-						ColumnType:    "bigint(20)",
-						IsNullable:    "NO",
-						Extra:         "auto_increment",
+						ColumnType:      "bigint(20)",
+						IsNullable:      "NO",
+						Extra:           "auto_increment",
 					},
 					{
-						Name:          "username",
+						Name:            "username",
 						OrdinalPosition: 2,
-						ColumnType:    "varchar(50)",
-						IsNullable:    "NO",
+						ColumnType:      "varchar(50)",
+						IsNullable:      "NO",
 					},
 					{
-						Name:          "obsolete_col",
+						Name:            "obsolete_col",
 						OrdinalPosition: 3,
-						ColumnType:    "varchar(100)",
-						IsNullable:    "YES",
+						ColumnType:      "varchar(100)",
+						IsNullable:      "YES",
 					},
 				},
 				PrimaryKey: &model.PrimaryKeySchema{
@@ -71,23 +73,23 @@ func TestDDLDiff(t *testing.T) {
 				Engine: "InnoDB",
 				Columns: []*model.ColumnSchema{
 					{
-						Name:          "id",
+						Name:            "id",
 						OrdinalPosition: 1,
-						ColumnType:    "bigint(20)",
-						IsNullable:    "NO",
-						Extra:         "auto_increment",
+						ColumnType:      "bigint(20)",
+						IsNullable:      "NO",
+						Extra:           "auto_increment",
 					},
 					{
-						Name:          "username",
+						Name:            "username",
 						OrdinalPosition: 2,
-						ColumnType:    "varchar(100)",
-						IsNullable:    "NO",
+						ColumnType:      "varchar(100)",
+						IsNullable:      "NO",
 					},
 					{
-						Name:          "email",
+						Name:            "email",
 						OrdinalPosition: 3,
-						ColumnType:    "varchar(100)",
-						IsNullable:    "YES",
+						ColumnType:      "varchar(100)",
+						IsNullable:      "YES",
 					},
 				},
 				PrimaryKey: &model.PrimaryKeySchema{
@@ -108,17 +110,17 @@ func TestDDLDiff(t *testing.T) {
 				Engine: "InnoDB",
 				Columns: []*model.ColumnSchema{
 					{
-						Name:          "order_id",
+						Name:            "order_id",
 						OrdinalPosition: 1,
-						ColumnType:    "varchar(64)",
-						IsNullable:    "NO",
+						ColumnType:      "varchar(64)",
+						IsNullable:      "NO",
 					},
 					{
-						Name:          "status",
+						Name:            "status",
 						OrdinalPosition: 2,
-						ColumnType:    "int(11)",
-						IsNullable:    "NO",
-						ColumnDefault: &defValZero,
+						ColumnType:      "int(11)",
+						IsNullable:      "NO",
+						ColumnDefault:   &defValZero,
 					},
 				},
 				PrimaryKey: &model.PrimaryKeySchema{
@@ -128,7 +130,7 @@ func TestDDLDiff(t *testing.T) {
 		},
 	}
 
-	diffs, summary := DiffSchemas(fromSchema, toSchema)
+	diffs, summary := diff.DiffSchemas(fromSchema, toSchema, mysql.New().Emitter())
 
 	// 校验统计汇总
 	if summary.AddedTables != 1 {
@@ -192,7 +194,7 @@ func TestDMLDiff(t *testing.T) {
 				ColumnNames:       []string{"id", "username", "status"},
 				Rows: []map[string]interface{}{
 					{"id": int64(1), "username": "alice", "status": 1},
-					{"id": int64(2), "username": "bob", "status": 1}, // 将被删除
+					{"id": int64(2), "username": "bob", "status": 1},     // 将被删除
 					{"id": int64(3), "username": "charlie", "status": 0}, // 将被修改
 				},
 			},
@@ -206,15 +208,15 @@ func TestDMLDiff(t *testing.T) {
 				PrimaryKeyColumns: []string{"id"},
 				ColumnNames:       []string{"id", "username", "status"},
 				Rows: []map[string]interface{}{
-					{"id": int64(1), "username": "alice", "status": 1}, // 未变动
+					{"id": int64(1), "username": "alice", "status": 1},   // 未变动
 					{"id": int64(3), "username": "charlie", "status": 1}, // status 0 -> 1 修改
-					{"id": int64(4), "username": "david", "status": 1}, // 新增
+					{"id": int64(4), "username": "david", "status": 1},   // 新增
 				},
 			},
 		},
 	}
 
-	diffs, summary := DiffData(fromData, toData)
+	diffs, summary := diff.DiffData(fromData, toData, nil, mysql.New().Emitter())
 
 	if summary.InsertCount != 1 {
 		t.Errorf("InsertCount = %d, want 1", summary.InsertCount)
@@ -281,7 +283,7 @@ func TestGenerateDiffResult(t *testing.T) {
 		},
 	}
 
-	res := GenerateDiffResult("dev_conn", "v1", "v2", fromSnap, toSnap)
+	res := diff.GenerateDiffResult("dev_conn", "v1", "v2", fromSnap, toSnap, model.DirectionUpgrade, mysql.New().Emitter())
 
 	if res.Summary.DML.UpdateCount != 1 {
 		t.Errorf("UpdateCount = %d, want 1", res.Summary.DML.UpdateCount)
@@ -291,5 +293,56 @@ func TestGenerateDiffResult(t *testing.T) {
 	}
 	if !strings.Contains(res.FullScript, "COMMIT;") {
 		t.Errorf("脚本未包含事务提交")
+	}
+}
+
+// TestGenerateDiffResultRollback 验证回滚方向会生成与升级方向相反的 DDL
+func TestGenerateDiffResultRollback(t *testing.T) {
+	from := &model.Snapshot{
+		Meta: model.VersionMeta{VersionID: "v1", Vendor: model.VendorMySQL},
+		Schema: &model.DatabaseSchema{Tables: map[string]*model.TableSchema{
+			"t1": {
+				Name: "t1",
+				Columns: []*model.ColumnSchema{
+					{Name: "id", ColumnType: "int", IsNullable: "NO"},
+				},
+				PrimaryKey: &model.PrimaryKeySchema{Name: "PRIMARY", Columns: []string{"id"}},
+			},
+		}},
+		Data: &model.DatabaseData{Tables: map[string]*model.TableData{}},
+	}
+	to := &model.Snapshot{
+		Meta: model.VersionMeta{VersionID: "v2", Vendor: model.VendorMySQL},
+		Schema: &model.DatabaseSchema{Tables: map[string]*model.TableSchema{
+			"t1": {
+				Name: "t1",
+				Columns: []*model.ColumnSchema{
+					{Name: "id", ColumnType: "int", IsNullable: "NO"},
+					{Name: "name", ColumnType: "varchar(50)", IsNullable: "YES"},
+				},
+				PrimaryKey: &model.PrimaryKeySchema{Name: "PRIMARY", Columns: []string{"id"}},
+			},
+		}},
+		Data: &model.DatabaseData{Tables: map[string]*model.TableData{}},
+	}
+
+	em := mysql.New().Emitter()
+	upgrade := diff.GenerateDiffResult("c", "v1", "v2", from, to, model.DirectionUpgrade, em)
+	rollback := diff.GenerateDiffResult("c", "v1", "v2", from, to, model.DirectionRollback, em)
+
+	if !strings.Contains(upgrade.DDLScript, "ADD COLUMN `name`") {
+		t.Errorf("升级脚本应新增字段: %s", upgrade.DDLScript)
+	}
+	if !strings.Contains(rollback.DDLScript, "DROP COLUMN `name`") {
+		t.Errorf("回滚脚本应删除字段: %s", rollback.DDLScript)
+	}
+	if rollback.Direction != model.DirectionRollback {
+		t.Errorf("回滚方向未记录: %s", rollback.Direction)
+	}
+	if upgrade.FromVersionID != "v1" || upgrade.ToVersionID != "v2" {
+		t.Errorf("版本号字段不应被方向交换: from=%s to=%s", upgrade.FromVersionID, upgrade.ToVersionID)
+	}
+	if !strings.Contains(rollback.FullScript, "回滚 (v2 -> v1)") {
+		t.Errorf("回滚脚本头部方向不正确: %s", rollback.FullScript)
 	}
 }

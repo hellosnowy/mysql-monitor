@@ -74,6 +74,10 @@ type TableDMLDiff struct {
 type DiffResult struct {
 	// ConnectionID 所属数据库连接 ID
 	ConnectionID string `json:"connection_id"`
+	// Vendor 数据库厂商
+	Vendor Vendor `json:"vendor,omitempty"`
+	// Direction 比对方向: upgrade / rollback
+	Direction DiffDirection `json:"direction,omitempty"`
 	// FromVersionID 起始/基准版本号
 	FromVersionID string `json:"from_version_id"`
 	// ToVersionID 目标版本号

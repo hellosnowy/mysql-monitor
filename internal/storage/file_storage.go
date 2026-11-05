@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"mysql-monitor/internal/model"
-	"mysql-monitor/pkg/crypto"
+	"sql-monitor/internal/model"
+	"sql-monitor/pkg/crypto"
 )
 
 // FileStorage 基于本地文件系统的结构化数据持久化实现
@@ -177,6 +177,8 @@ func (s *FileStorage) loadConnectionsNoLock() ([]model.ConnectionConfig, error) 
 				conns[i].Password = plain
 			}
 		}
+		// 老版本配置没有 vendor 字段，统一归一化为 MySQL
+		conns[i].Normalize()
 	}
 
 	if conns == nil {
@@ -195,6 +197,7 @@ func (s *FileStorage) saveConnectionsNoLock(conns []model.ConnectionConfig) erro
 	copy(toSave, conns)
 
 	for i := range toSave {
+		toSave[i].Normalize()
 		if toSave[i].Password != "" && !crypto.IsEncrypted(toSave[i].Password) && cipher != nil {
 			enc, err := cipher.Encrypt(toSave[i].Password)
 			if err == nil {
@@ -227,8 +230,15 @@ func (s *FileStorage) SaveSnapshot(snapshot *model.Snapshot) error {
 	if snapshot == nil {
 		return fmt.Errorf("快照实体不能为 nil")
 	}
+	snapshot.Normalize()
+	if snapshot.Meta.FormatVersion < model.SnapshotFormatVersion {
+		snapshot.Meta.FormatVersion = model.SnapshotFormatVersion
+	}
 
 	dir := s.snapshotDir(snapshot.Meta.ConnectionID, snapshot.Meta.VersionID)
+	if _, err := os.Stat(dir); err == nil {
+		return fmt.Errorf("版本 %s 已存在，拒绝覆盖历史快照", snapshot.Meta.VersionID)
+	}
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("创建快照目录失败: %w", err)
 	}
@@ -294,6 +304,8 @@ func (s *FileStorage) GetSnapshot(connID, versionID string) (*model.Snapshot, er
 	if err := json.Unmarshal(schemaBytes, &schema); err != nil {
 		return nil, fmt.Errorf("解析快照表结构失败: %w", err)
 	}
+	meta.Normalize()
+	schema.Normalize(meta.Vendor)
 
 	// 读取 data.json
 	dataFile := filepath.Join(dir, "data.json")
@@ -309,11 +321,13 @@ func (s *FileStorage) GetSnapshot(connID, versionID string) (*model.Snapshot, er
 		return nil, fmt.Errorf("解析快照行数据失败: %w", err)
 	}
 
-	return &model.Snapshot{
+	snapshot := &model.Snapshot{
 		Meta:   meta,
 		Schema: &schema,
 		Data:   &dbData,
-	}, nil
+	}
+	snapshot.Normalize()
+	return snapshot, nil
 }
 
 // ListSnapshots 获取指定连接的所有快照版本，按创建时间倒序排列
@@ -340,6 +354,7 @@ func (s *FileStorage) ListSnapshots(connID string) ([]model.VersionMeta, error) 
 		if bytes, err := os.ReadFile(metaPath); err == nil {
 			var meta model.VersionMeta
 			if jsonErr := json.Unmarshal(bytes, &meta); jsonErr == nil {
+				meta.Normalize()
 				list = append(list, meta)
 			}
 		}

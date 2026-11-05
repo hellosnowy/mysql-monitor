@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"mysql-monitor/internal/model"
+	"sql-monitor/internal/model"
 )
 
 // TableFilter 数据表黑白名单过滤器

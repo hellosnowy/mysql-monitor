@@ -3,10 +3,10 @@
     <!-- 顶部导航栏 -->
     <header class="app-header">
       <div class="header-brand">
-        <div class="logo-icon">🐬</div>
+        <div class="logo-icon">🗄️</div>
         <div class="brand-text">
-          <h1>MySQL Monitor</h1>
-          <span class="sub-title">DDL & DML 监控与版本比对工具</span>
+          <h1>SQL Monitor</h1>
+          <span class="sub-title">多数据库 DDL & DML 监控与版本比对工具</span>
         </div>
       </div>
       <nav class="nav-tabs">
@@ -43,7 +43,7 @@
         <div class="content-header">
           <div>
             <h2>数据库连接列表</h2>
-            <p class="description">管理监控的 MySQL 数据库实例，并配置各库的数据表黑白名单规则</p>
+            <p class="description">管理监控的 MySQL、PostgreSQL、SQL Server 数据库实例，并配置各库的数据表黑白名单规则</p>
           </div>
           <button class="btn btn-primary" @click="openAddConnectionModal">
             + 新建连接
@@ -57,7 +57,7 @@
         <div v-else-if="connections.length === 0" class="empty-card">
           <div class="empty-icon">📭</div>
           <h3>暂无数据库连接</h3>
-          <p>点击右上角“+ 新建连接”添加您的第一个 MySQL 数据库连接配置</p>
+          <p>点击右上角“+ 新建连接”添加您的第一个数据库连接配置</p>
           <button class="btn btn-primary" @click="openAddConnectionModal">立即添加</button>
         </div>
 
@@ -67,6 +67,7 @@
               <div class="card-title">
                 <span class="db-status-dot"></span>
                 <h3>{{ conn.name || conn.id }}</h3>
+                <span class="badge badge-vendor">{{ vendorLabel(conn.vendor) }}</span>
                 <span class="badge badge-id">{{ conn.id }}</span>
               </div>
               <div class="card-actions">
@@ -83,6 +84,10 @@
               <div class="info-row">
                 <span class="label">目标数据库:</span>
                 <span class="value font-bold">{{ conn.database }}</span>
+              </div>
+              <div class="info-row" v-if="conn.vendor && conn.vendor !== 'mysql'">
+                <span class="label">Schema 模式:</span>
+                <span class="value font-bold">{{ conn.schema || defaultSchema(conn.vendor) }}</span>
               </div>
               <div class="info-row">
                 <span class="label">监控模式:</span>
@@ -269,9 +274,39 @@
             </select>
           </div>
 
+          <div class="control-col direction-col">
+            <label>SQL 方向</label>
+            <div class="direction-toggle">
+              <button
+                type="button"
+                :class="['direction-btn', 'direction-upgrade', diffDirection === 'upgrade' ? 'active' : '']"
+                @click="setDiffDirection('upgrade')"
+              >
+                <span :class="['direction-checkbox', diffDirection === 'upgrade' ? 'checked' : '']">
+                  <svg v-if="diffDirection === 'upgrade'" class="check-icon" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M13.485 3.515a1 1 0 0 1 0 1.414l-7 7a1 1 0 0 1-1.414 0l-3.5-3.5a1 1 0 1 1 1.414-1.414L5.778 10.515l6.293-6.293a1 1 0 0 1 1.414 0z"/>
+                  </svg>
+                </span>
+                <span class="direction-text">升级 From → To</span>
+              </button>
+              <button
+                type="button"
+                :class="['direction-btn', 'direction-rollback', diffDirection === 'rollback' ? 'active' : '']"
+                @click="setDiffDirection('rollback')"
+              >
+                <span :class="['direction-checkbox', diffDirection === 'rollback' ? 'checked' : '']">
+                  <svg v-if="diffDirection === 'rollback'" class="check-icon" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M13.485 3.515a1 1 0 0 1 0 1.414l-7 7a1 1 0 0 1-1.414 0l-3.5-3.5a1 1 0 1 1 1.414-1.414L5.778 10.515l6.293-6.293a1 1 0 0 1 1.414 0z"/>
+                  </svg>
+                </span>
+                <span class="direction-text">回滚 To → From</span>
+              </button>
+            </div>
+          </div>
+
           <div class="control-action">
-            <button 
-              class="btn btn-primary btn-diff" 
+            <button
+              class="btn btn-primary btn-diff"
               :disabled="!diffConnId || !fromVersion || !toVersion || comparing"
               @click="runDiff"
             >
@@ -282,6 +317,13 @@
 
         <!-- 比对结果展示区 -->
         <div v-if="diffResult" class="diff-result-section">
+          <div class="diff-result-meta">
+            <span class="badge badge-vendor">{{ vendorLabel(diffResult.vendor) }}</span>
+            <span :class="['badge', diffResult.direction === 'rollback' ? 'badge-warning' : 'badge-success']">
+              {{ diffResult.direction === 'rollback' ? '回滚脚本 (To → From)' : '升级脚本 (From → To)' }}
+            </span>
+          </div>
+
           <!-- 变动摘要统计卡片 -->
           <div class="stats-grid">
             <div class="stat-card">
@@ -351,7 +393,7 @@
             </div>
 
             <div class="sql-code-container">
-              <pre class="sql-code"><code>{{ activeSQLContent || '-- 经比对，选定的两个版本之间未检测到变动差异 --' }}</code></pre>
+              <pre class="sql-code" contenteditable="false"><code contenteditable="false">{{ activeSQLContent || '-- 经比对，选定的两个版本之间未检测到变动差异 --' }}</code></pre>
             </div>
           </div>
         </div>
@@ -367,6 +409,17 @@
         </div>
         <div class="modal-body">
           <div class="form-grid">
+            <div class="form-group">
+              <label>数据库厂商 *</label>
+              <select v-model="connForm.vendor" class="select-input" :disabled="vendorLocked" @change="applyVendorDefaults">
+                <option v-for="v in vendors" :key="v.vendor" :value="v.vendor">{{ v.display_name }}</option>
+              </select>
+              <div class="driver-hint" v-if="currentVendorInfo">
+                <span class="badge badge-success">内置驱动</span>
+                <span>{{ currentVendorInfo.driver_package }} {{ currentVendorInfo.driver_version }}</span>
+              </div>
+              <div class="driver-hint" v-if="vendorLocked">已有历史快照，厂商不可修改</div>
+            </div>
             <div class="form-group">
               <label>连接标识 ID *</label>
               <input v-model="connForm.id" :disabled="editingConn" type="text" placeholder="如 dev_order_db" />
@@ -399,9 +452,21 @@
               <label>目标数据库 *</label>
               <input v-model="connForm.database" type="text" placeholder="mall" />
             </div>
-            <div class="form-group">
+            <div class="form-group" v-if="connForm.vendor === 'mysql'">
               <label>字符集</label>
               <input v-model="connForm.charset" type="text" placeholder="utf8mb4" />
+            </div>
+            <div class="form-group" v-else>
+              <label>Schema / 模式 *</label>
+              <div class="input-with-action">
+                <input v-model="connForm.schema" type="text" :placeholder="defaultSchema(connForm.vendor)" />
+                <button class="btn btn-outline btn-sm" type="button" :disabled="loadingSchemas" @click="loadSchemas">
+                  {{ loadingSchemas ? '加载中...' : '加载列表' }}
+                </button>
+              </div>
+              <select v-if="availableSchemas.length" v-model="connForm.schema" class="select-input schema-select">
+                <option v-for="s in availableSchemas" :key="s" :value="s">{{ s }}</option>
+              </select>
             </div>
           </div>
 
@@ -512,15 +577,29 @@ const editingConn = ref(false)
 const testingConnId = ref('')
 const connTestResults = reactive({})
 
+const vendors = ref([])
+const vendorLocked = ref(false)
+const loadingSchemas = ref(false)
+const availableSchemas = ref([])
+
+const vendorDefaults = {
+  mysql: { port: 3306, schema: '', charset: 'utf8mb4' },
+  postgres: { port: 5432, schema: 'public', charset: '' },
+  sqlserver: { port: 1433, schema: 'dbo', charset: '' },
+}
+
 const defaultConnForm = () => ({
   id: '',
   name: '',
+  vendor: 'mysql',
   host: '127.0.0.1',
   port: 3306,
   user: 'root',
   password: '',
   database: '',
+  schema: '',
   charset: 'utf8mb4',
+  ssl_mode: '',
   timeout_seconds: 10,
   filter: {
     include_tables: [],
@@ -533,6 +612,56 @@ const defaultConnForm = () => ({
 const connForm = reactive(defaultConnForm())
 const includeTablesText = ref('')
 const excludeTablesText = ref('')
+
+const currentVendorInfo = computed(() =>
+  vendors.value.find(v => v.vendor === connForm.vendor) || null
+)
+
+const defaultSchema = (vendor) => (vendorDefaults[vendor] || vendorDefaults.mysql).schema
+
+const vendorLabel = (vendor) => {
+  const v = vendors.value.find(x => x.vendor === (vendor || 'mysql'))
+  if (v) return v.display_name
+  if (vendor === 'postgres') return 'PostgreSQL'
+  if (vendor === 'sqlserver') return 'SQL Server'
+  return 'MySQL'
+}
+
+const loadVendors = async () => {
+  try {
+    vendors.value = (await api.getVendors()) || []
+  } catch (err) {
+    showToast('获取内置驱动信息失败: ' + err, 'error')
+  }
+}
+
+const applyVendorDefaults = () => {
+  const d = vendorDefaults[connForm.vendor] || vendorDefaults.mysql
+  connForm.port = d.port
+  connForm.schema = d.schema
+  connForm.charset = d.charset
+  availableSchemas.value = []
+}
+
+const loadSchemas = async () => {
+  if (!connForm.host || !connForm.user || !connForm.database) {
+    showToast('请先填写主机、用户名和目标数据库', 'warning')
+    return
+  }
+  loadingSchemas.value = true
+  try {
+    const list = await api.listSchemas(JSON.parse(JSON.stringify(connForm)))
+    availableSchemas.value = list || []
+    if (!connForm.schema && availableSchemas.value.length > 0) {
+      connForm.schema = availableSchemas.value[0]
+    }
+    showToast(`已加载 ${availableSchemas.value.length} 个 Schema`, 'success')
+  } catch (err) {
+    showToast('加载 Schema 失败: ' + err, 'error')
+  } finally {
+    loadingSchemas.value = false
+  }
+}
 
 const loadConnections = async () => {
   loadingConnections.value = true
@@ -551,15 +680,25 @@ const openAddConnectionModal = () => {
   Object.assign(connForm, defaultConnForm())
   includeTablesText.value = ''
   excludeTablesText.value = ''
+  availableSchemas.value = []
+  vendorLocked.value = false
   showConnModal.value = true
 }
 
 const editConnection = (c) => {
   editingConn.value = true
   Object.assign(connForm, JSON.parse(JSON.stringify(c)))
+  if (!connForm.vendor) connForm.vendor = 'mysql'
+  if (!connForm.schema) connForm.schema = defaultSchema(connForm.vendor)
   connForm.password = '' // 留空表示不修改已有密码
   includeTablesText.value = (c.filter.include_tables || []).join(', ')
   excludeTablesText.value = (c.filter.exclude_tables || []).join(', ')
+  availableSchemas.value = []
+  vendorLocked.value = false
+  // 已有历史快照的连接禁止修改厂商，避免跨方言快照无法比对
+  api.listSnapshots(c.id).then(list => {
+    vendorLocked.value = (list || []).length > 0
+  }).catch(() => {})
   showConnModal.value = true
 }
 
@@ -578,6 +717,10 @@ const parseTableList = (str) => {
 const submitConnection = async () => {
   if (!connForm.id || !connForm.host || !connForm.user || !connForm.database) {
     showToast('请完整填写必填字段', 'error')
+    return
+  }
+  if (connForm.vendor !== 'mysql' && !connForm.schema) {
+    showToast('请填写 Schema / 模式', 'error')
     return
   }
 
@@ -708,6 +851,13 @@ const toVersion = ref('')
 const comparing = ref(false)
 const diffResult = ref(null)
 const sqlTab = ref('full')
+const diffDirection = ref('upgrade')
+
+const setDiffDirection = (dir) => {
+  if (diffDirection.value === dir) return
+  diffDirection.value = dir
+  diffResult.value = null
+}
 
 const loadDiffSnapshots = async () => {
   if (!diffConnId.value) return
@@ -741,8 +891,8 @@ const runDiff = async () => {
 
   comparing.value = true
   try {
-    diffResult.value = await api.compareVersions(diffConnId.value, fromVersion.value, toVersion.value)
-    showToast('版本比对完成', 'success')
+    diffResult.value = await api.compareVersions(diffConnId.value, fromVersion.value, toVersion.value, diffDirection.value)
+    showToast(diffDirection.value === 'rollback' ? '回滚脚本生成完成' : '升级脚本生成完成', 'success')
   } catch (err) {
     showToast('比对失败: ' + err, 'error')
   } finally {
@@ -769,7 +919,7 @@ const copyActiveSQL = async () => {
 
 const exportSQL = async () => {
   if (!activeSQLContent.value) return
-  const defaultName = `diff_${diffConnId.value}_${fromVersion.value}_to_${toVersion.value}.sql`
+  const defaultName = `diff_${diffConnId.value}_${diffDirection.value}_${fromVersion.value}_to_${toVersion.value}.sql`
   try {
     const savedPath = await api.exportSQLFile(defaultName, activeSQLContent.value)
     if (savedPath) {
@@ -787,6 +937,7 @@ const formatDate = (dateStr) => {
 }
 
 onMounted(() => {
+  loadVendors()
   loadConnections()
 })
 </script>
@@ -837,6 +988,7 @@ onMounted(() => {
 .nav-tabs {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .nav-tab {
@@ -849,6 +1001,8 @@ onMounted(() => {
   color: var(--text-muted);
   font-size: 14px;
   font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .nav-tab:hover {
@@ -893,9 +1047,10 @@ onMounted(() => {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-shrink: 0;
 }
 
-/* 按钮规范 */
+/* 按钮规范 - 全局不换行且防挤压变形 */
 .btn {
   padding: 8px 16px;
   border-radius: 6px;
@@ -905,6 +1060,8 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn-primary {
@@ -966,6 +1123,8 @@ onMounted(() => {
   padding: 4px 6px;
   border-radius: 4px;
   font-size: 14px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn-icon:hover {
@@ -1072,6 +1231,9 @@ onMounted(() => {
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
 }
 
 .test-result-box {
@@ -1207,6 +1369,8 @@ onMounted(() => {
 .action-buttons {
   display: flex;
   gap: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* 比对控制面板 */
@@ -1220,13 +1384,24 @@ onMounted(() => {
   gap: 16px;
   box-shadow: var(--shadow-sm);
   margin-bottom: 24px;
+  flex-wrap: wrap;
 }
 
 .control-col {
-  flex: 1;
+  flex: 1 1 180px;
+  min-width: 170px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.control-col.direction-col {
+  flex: 0 0 auto;
+  min-width: 250px;
+}
+
+.control-action {
+  flex: 0 0 auto;
 }
 
 .control-col label {
@@ -1249,11 +1424,14 @@ onMounted(() => {
   font-size: 20px;
   color: var(--text-muted);
   padding-bottom: 8px;
+  flex-shrink: 0;
 }
 
 .btn-diff {
   height: 38px;
   padding: 0 20px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* 比对统计卡片 */
@@ -1334,11 +1512,15 @@ onMounted(() => {
   padding: 10px 16px;
   background: #f8fafc;
   border-bottom: 1px solid var(--border);
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .script-tabs {
   display: flex;
   gap: 6px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
 }
 
 .script-tab {
@@ -1347,6 +1529,8 @@ onMounted(() => {
   font-size: 12px;
   background: transparent;
   color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .script-tab.active {
@@ -1359,13 +1543,18 @@ onMounted(() => {
 .script-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
 }
 
+/* 历史比对框：严格禁止编辑，支持自由选择高亮与复制 */
 .sql-code-container {
   padding: 16px;
   max-height: 480px;
   overflow-y: auto;
   background: #1e293b;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .sql-code {
@@ -1374,6 +1563,21 @@ onMounted(() => {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-all;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.sql-code code {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.sql-code ::selection,
+.sql-code code::selection {
+  background-color: #2563eb;
+  color: #ffffff;
 }
 
 /* 模态弹窗 */
@@ -1492,6 +1696,7 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+  flex-wrap: nowrap;
 }
 
 /* 消息 Toast */
@@ -1548,5 +1753,134 @@ onMounted(() => {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* ===== 多数据库扩展 ===== */
+.badge-vendor {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.direction-toggle {
+  display: flex;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 3px;
+  gap: 6px;
+}
+
+.direction-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 7px 12px;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #64748b;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+
+.direction-btn:hover:not(.active) {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+
+/* 方向单选/复选框小组件 */
+.direction-checkbox {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid #94a3b8;
+  background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.18s ease;
+  flex-shrink: 0;
+}
+
+.direction-btn:hover:not(.active) .direction-checkbox {
+  border-color: #64748b;
+}
+
+.check-icon {
+  width: 11px;
+  height: 11px;
+  fill: currentColor;
+}
+
+/* 升级方向 - 选中高亮特效强化 (品牌蓝 + 发光外圈) */
+.direction-btn.direction-upgrade.active {
+  background: #eff6ff;
+  border-color: var(--primary);
+  color: #1d4ed8;
+  font-weight: 600;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2), 0 2px 6px rgba(37, 99, 235, 0.15);
+  transform: translateY(-1px);
+}
+
+.direction-btn.direction-upgrade.active .direction-checkbox.checked {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.35);
+}
+
+/* 回滚方向 - 选中高亮特效强化 (醒目警示橙 + 发光外圈) */
+.direction-btn.direction-rollback.active {
+  background: #fffbeb;
+  border-color: #d97706;
+  color: #b45309;
+  font-weight: 600;
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.25), 0 2px 6px rgba(217, 119, 6, 0.15);
+  transform: translateY(-1px);
+}
+
+.direction-btn.direction-rollback.active .direction-checkbox.checked {
+  background: #d97706;
+  border-color: #d97706;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(217, 119, 6, 0.35);
+}
+
+.driver-hint {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.input-with-action {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.input-with-action input {
+  flex: 1;
+}
+
+.schema-select {
+  margin-top: 6px;
+}
+
+.diff-result-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
 }
 </style>

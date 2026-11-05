@@ -5,32 +5,38 @@ import (
 	"strings"
 	"time"
 
-	"mysql-monitor/internal/model"
+	"sql-monitor/internal/model"
+	"sql-monitor/internal/sqlgen"
 )
 
-// GenerateDiffResult 综合执行 DDL 与 DML 比对，生成包含统计概览与可执行 SQL 脚本的完整比对结果
-func GenerateDiffResult(connID, fromVer, toVer string, fromSnap, toSnap *model.Snapshot) *model.DiffResult {
-	var fromSchema *model.DatabaseSchema
-	var toSchema *model.DatabaseSchema
-	var fromData *model.DatabaseData
-	var toData *model.DatabaseData
+// GenerateDiffResult 综合执行 DDL 与 DML 比对，生成包含统计概览与可执行 SQL 脚本的完整比对结果。
+// direction 为 rollback 时内部交换两个快照，生成“由目标版本回滚到起始版本”的 SQL。
+func GenerateDiffResult(connID, fromVer, toVer string, fromSnap, toSnap *model.Snapshot, direction model.DiffDirection, em sqlgen.Emitter) *model.DiffResult {
+	direction = model.NormalizeDirection(direction)
 
-	if fromSnap != nil {
-		fromSchema = fromSnap.Schema
-		fromData = fromSnap.Data
+	effectiveFrom, effectiveTo := fromSnap, toSnap
+	if direction == model.DirectionRollback {
+		effectiveFrom, effectiveTo = toSnap, fromSnap
 	}
-	if toSnap != nil {
-		toSchema = toSnap.Schema
-		toData = toSnap.Data
+
+	var fromSchema, toSchema *model.DatabaseSchema
+	var fromData, toData *model.DatabaseData
+	if effectiveFrom != nil {
+		fromSchema = effectiveFrom.Schema
+		fromData = effectiveFrom.Data
+	}
+	if effectiveTo != nil {
+		toSchema = effectiveTo.Schema
+		toData = effectiveTo.Data
 	}
 
 	// 1. 运行 DDL 差异比对
-	tableDDLs, ddlSummary := DiffSchemas(fromSchema, toSchema)
+	tableDDLs, ddlSummary := DiffSchemas(fromSchema, toSchema, em)
 
 	// 2. 运行 DML 差异比对。结构快照没有行数据，不能解释为全表清空。
 	var tableDMLs []*model.TableDMLDiff
 	var dmlSummary model.DMLDiffSummary
-	if !isSchemaOnlySnapshot(fromSnap) && !isSchemaOnlySnapshot(toSnap) {
+	if !isSchemaOnlySnapshot(effectiveFrom) && !isSchemaOnlySnapshot(effectiveTo) {
 		// 整表删除由 DDL 处理，避免在 DROP TABLE 之后再生成 DELETE。
 		if fromData != nil && toSchema != nil {
 			filtered := &model.DatabaseData{Tables: make(map[string]*model.TableData)}
@@ -41,7 +47,7 @@ func GenerateDiffResult(connID, fromVer, toVer string, fromSnap, toSnap *model.S
 			}
 			fromData = filtered
 		}
-		tableDMLs, dmlSummary = DiffData(fromData, toData)
+		tableDMLs, dmlSummary = DiffData(fromData, toData, toSchema, em)
 	}
 
 	// 3. 构造纯 DDL 脚本
@@ -63,6 +69,13 @@ func GenerateDiffResult(connID, fromVer, toVer string, fromSnap, toSnap *model.S
 	for _, td := range tableDMLs {
 		dmlScriptBuilder.WriteString(fmt.Sprintf("-- 表: %s (新增: %d, 更新: %d, 删除: %d)\n",
 			td.TableName, td.InsertCount, td.UpdateCount, td.DeleteCount))
+
+		tableSchema := lookupTableSchema(toSchema, td.TableName)
+		hasInserts := td.InsertCount > 0
+		for _, stmt := range em.TableDMLBegin(tableSchema, hasInserts) {
+			dmlScriptBuilder.WriteString(stmt)
+			dmlScriptBuilder.WriteString("\n")
+		}
 		for _, stmt := range td.DeleteStatements {
 			dmlScriptBuilder.WriteString(stmt)
 			dmlScriptBuilder.WriteString("\n")
@@ -75,12 +88,18 @@ func GenerateDiffResult(connID, fromVer, toVer string, fromSnap, toSnap *model.S
 			dmlScriptBuilder.WriteString(stmt)
 			dmlScriptBuilder.WriteString("\n")
 		}
+		for _, stmt := range em.TableDMLEnd(tableSchema, hasInserts) {
+			dmlScriptBuilder.WriteString(stmt)
+			dmlScriptBuilder.WriteString("\n")
+		}
 		dmlScriptBuilder.WriteString("\n")
 	}
 
 	now := time.Now()
 	res := &model.DiffResult{
 		ConnectionID:  connID,
+		Vendor:        em.Vendor(),
+		Direction:     direction,
 		FromVersionID: fromVer,
 		ToVersionID:   toVer,
 		ComparedAt:    now,
@@ -97,10 +116,14 @@ func GenerateDiffResult(connID, fromVer, toVer string, fromSnap, toSnap *model.S
 	// 5. 构造带事务安全包裹的完整脚本
 	var fullBuilder strings.Builder
 	fullBuilder.WriteString("-- ====================================================================\n")
-	fullBuilder.WriteString("-- MySQL Monitor 版本差异同步脚本\n")
+	fullBuilder.WriteString(fmt.Sprintf("-- SQL Monitor 版本差异同步脚本 (%s)\n", em.Vendor().DisplayName()))
 	fullBuilder.WriteString(fmt.Sprintf("-- 连接标识: %s\n", connID))
-	fullBuilder.WriteString(fmt.Sprintf("-- 起始基准版本: %s\n", fromVer))
-	fullBuilder.WriteString(fmt.Sprintf("-- 目标对比版本: %s\n", toVer))
+	if direction == model.DirectionRollback {
+		fullBuilder.WriteString(fmt.Sprintf("-- 方向: 回滚 (%s -> %s)\n", toVer, fromVer))
+	} else {
+		fullBuilder.WriteString(fmt.Sprintf("-- 方向: 升级 (%s -> %s)\n", fromVer, toVer))
+	}
+	fullBuilder.WriteString(fmt.Sprintf("-- 选择版本: 起始=%s 目标=%s\n", fromVer, toVer))
 	fullBuilder.WriteString(fmt.Sprintf("-- 生成时间: %s\n", now.Format("2006-01-02 15:04:05")))
 	fullBuilder.WriteString("--\n")
 	fullBuilder.WriteString(fmt.Sprintf("-- DDL 变动: 新建表 %d, 删除表 %d, 变更表 %d | 新增字段 %d, 删除字段 %d, 修改字段 %d | 新增索引 %d, 删除索引 %d\n",
@@ -111,27 +134,53 @@ func GenerateDiffResult(connID, fromVer, toVer string, fromSnap, toSnap *model.S
 		dmlSummary.InsertCount, dmlSummary.UpdateCount, dmlSummary.DeleteCount))
 	fullBuilder.WriteString("-- ====================================================================\n\n")
 
-	fullBuilder.WriteString("SET NAMES utf8mb4;\n")
-	fullBuilder.WriteString("SET FOREIGN_KEY_CHECKS = 0;\n\n")
+	sessionBegin := em.SessionBegin()
+	for _, stmt := range sessionBegin {
+		fullBuilder.WriteString(stmt)
+		fullBuilder.WriteString("\n")
+	}
+	if len(sessionBegin) > 0 {
+		fullBuilder.WriteString("\n")
+	}
 
 	if res.DDLScript != "" {
 		fullBuilder.WriteString("-- --------------------------------------------------------------------\n")
 		fullBuilder.WriteString("-- 1. DDL 结构变更\n")
 		fullBuilder.WriteString("-- --------------------------------------------------------------------\n")
+		for _, stmt := range em.DDLBegin() {
+			fullBuilder.WriteString(stmt)
+			fullBuilder.WriteString("\n")
+		}
 		fullBuilder.WriteString(res.DDLScript)
-		fullBuilder.WriteString("\n\n")
+		fullBuilder.WriteString("\n")
+		for _, stmt := range em.DDLEnd() {
+			fullBuilder.WriteString(stmt)
+			fullBuilder.WriteString("\n")
+		}
+		fullBuilder.WriteString("\n")
 	}
 
 	if res.DMLScript != "" {
 		fullBuilder.WriteString("-- --------------------------------------------------------------------\n")
-		fullBuilder.WriteString("-- 2. DML 数据变更（事务保护）\n")
+		fullBuilder.WriteString("-- 2. DML 数据变更\n")
 		fullBuilder.WriteString("-- --------------------------------------------------------------------\n")
-		fullBuilder.WriteString("START TRANSACTION;\n\n")
+		for _, stmt := range em.DMLBegin() {
+			fullBuilder.WriteString(stmt)
+			fullBuilder.WriteString("\n")
+		}
 		fullBuilder.WriteString(res.DMLScript)
-		fullBuilder.WriteString("\n\nCOMMIT;\n\n")
+		fullBuilder.WriteString("\n")
+		for _, stmt := range em.DMLEnd() {
+			fullBuilder.WriteString(stmt)
+			fullBuilder.WriteString("\n")
+		}
+		fullBuilder.WriteString("\n")
 	}
 
-	fullBuilder.WriteString("SET FOREIGN_KEY_CHECKS = 1;\n")
+	for _, stmt := range em.SessionEnd() {
+		fullBuilder.WriteString(stmt)
+		fullBuilder.WriteString("\n")
+	}
 	res.FullScript = strings.TrimSpace(fullBuilder.String())
 
 	return res

@@ -1,11 +1,13 @@
-package diff
+package diff_test
 
 import (
 	"encoding/json"
 	"strings"
 	"testing"
 
-	"mysql-monitor/internal/model"
+	"sql-monitor/internal/dialect/mysql"
+	"sql-monitor/internal/diff"
+	"sql-monitor/internal/model"
 )
 
 func TestDiffDataCompositeKeyDoesNotCollide(t *testing.T) {
@@ -20,7 +22,7 @@ func TestDiffDataCompositeKeyDoesNotCollide(t *testing.T) {
 		}},
 	}}
 
-	_, summary := DiffData(from, to)
+	_, summary := diff.DiffData(from, to, nil, mysql.New().Emitter())
 	if summary.InsertCount != 1 || summary.DeleteCount != 1 || summary.UpdateCount != 0 {
 		t.Fatalf("unexpected diff: %+v", summary)
 	}
@@ -35,7 +37,7 @@ func TestDiffDataKeepsDuplicateRowsWithoutPrimaryKey(t *testing.T) {
 		"items": {ColumnNames: []string{"value"}, Rows: []map[string]interface{}{row}},
 	}}
 
-	diffs, summary := DiffData(from, to)
+	diffs, summary := diff.DiffData(from, to, nil, mysql.New().Emitter())
 	if summary.DeleteCount != 1 || summary.InsertCount != 0 || len(diffs) != 1 {
 		t.Fatalf("unexpected diff: %+v", summary)
 	}
@@ -57,7 +59,7 @@ func TestDiffDataDistinguishesValueTypesAndPreservesLargeKey(t *testing.T) {
 		}},
 	}}
 
-	diffs, summary := DiffData(from, to)
+	diffs, summary := diff.DiffData(from, to, nil, mysql.New().Emitter())
 	if summary.UpdateCount != 1 || len(diffs) != 1 {
 		t.Fatalf("unexpected diff: %+v", summary)
 	}
@@ -78,7 +80,7 @@ func TestGenerateDiffResultSkipsMissingSchemaOnlyData(t *testing.T) {
 		Data:   &model.DatabaseData{Tables: map[string]*model.TableData{}},
 	}
 
-	result := GenerateDiffResult("conn", "from", "to", from, to)
+	result := diff.GenerateDiffResult("conn", "from", "to", from, to, model.DirectionUpgrade, mysql.New().Emitter())
 	if result.Summary.DML.DeleteCount != 0 || len(result.TableDMLDiffs) != 0 {
 		t.Fatalf("schema-only snapshot produced DML: %+v", result.Summary.DML)
 	}
@@ -96,7 +98,7 @@ func TestGenerateDiffResultDoesNotDeleteRowsAfterDroppingTable(t *testing.T) {
 		Data:   &model.DatabaseData{Tables: map[string]*model.TableData{}},
 	}
 
-	result := GenerateDiffResult("conn", "from", "to", from, to)
+	result := diff.GenerateDiffResult("conn", "from", "to", from, to, model.DirectionUpgrade, mysql.New().Emitter())
 	if result.Summary.DDL.DroppedTables != 1 || result.Summary.DML.DeleteCount != 0 {
 		t.Fatalf("unexpected diff: %+v", result.Summary)
 	}

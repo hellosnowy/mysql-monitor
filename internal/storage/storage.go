@@ -1,6 +1,6 @@
 package storage
 
-import "mysql-monitor/internal/model"
+import "sql-monitor/internal/model"
 
 // Storage 数据持久化抽象接口
 type Storage interface {

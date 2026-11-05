@@ -37,6 +37,8 @@ body {
 
 code, pre {
   font-family: "Fira Code", Consolas, Monaco, "Courier New", monospace;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 button {
@@ -45,11 +47,15 @@ button {
   border: none;
   outline: none;
   transition: all 0.15s ease-in-out;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 input, select, textarea {
   font-family: inherit;
   outline: none;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* 滚动条美化 */

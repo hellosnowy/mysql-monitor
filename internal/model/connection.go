@@ -1,7 +1,6 @@
 package model
 
 import (
-	"fmt"
 	"strings"
 	"time"
 )
@@ -18,12 +17,14 @@ type TableFilterConfig struct {
 	MaxRowsPerTable int `json:"max_rows_per_table"`
 }
 
-// ConnectionConfig MySQL 数据库连接配置信息
+// ConnectionConfig 数据库连接配置信息（多方言通用）
 type ConnectionConfig struct {
 	// ID 连接唯一标识 ID
 	ID string `json:"id"`
 	// Name 连接名称或别名
 	Name string `json:"name"`
+	// Vendor 数据库厂商: mysql / postgres / sqlserver，老数据缺省为 mysql
+	Vendor Vendor `json:"vendor,omitempty"`
 	// Host 数据库主机地址
 	Host string `json:"host"`
 	// Port 数据库端口
@@ -34,8 +35,14 @@ type ConnectionConfig struct {
 	Password string `json:"password"`
 	// Database 目标数据库名称
 	Database string `json:"database"`
-	// Charset 字符集，默认 utf8mb4
-	Charset string `json:"charset"`
+	// Schema 数据库模式: PostgreSQL 默认 public，SQL Server 默认 dbo，MySQL 使用数据库名
+	Schema string `json:"schema,omitempty"`
+	// Charset 字符集，仅 MySQL 使用，默认 utf8mb4
+	Charset string `json:"charset,omitempty"`
+	// SSLMode PostgreSQL sslmode 或 SQL Server encrypt 参数
+	SSLMode string `json:"ssl_mode,omitempty"`
+	// Options 其他厂商特定连接参数
+	Options map[string]string `json:"options,omitempty"`
 	// TimeoutSeconds 连接超时时间（秒），默认 10
 	TimeoutSeconds int `json:"timeout_seconds"`
 	// Filter 针对该连接的数据表黑白名单与监控模式
@@ -46,42 +53,64 @@ type ConnectionConfig struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// FormatDSN 生成 MySQL 连接字符串 (DSN)
-func (c *ConnectionConfig) FormatDSN() string {
-	charset := c.Charset
-	if charset == "" {
-		charset = "utf8mb4"
+// Normalize 补齐连接配置的默认值，并归一化老版本缺失的厂商字段
+func (c *ConnectionConfig) Normalize() {
+	c.Vendor = NormalizeVendor(c.Vendor)
+	switch c.Vendor {
+	case VendorPostgres:
+		if c.Port == 0 {
+			c.Port = 5432
+		}
+		if strings.TrimSpace(c.Schema) == "" {
+			c.Schema = "public"
+		}
+		if strings.TrimSpace(c.SSLMode) == "" {
+			c.SSLMode = "prefer"
+		}
+	case VendorSQLServer:
+		if c.Port == 0 {
+			c.Port = 1433
+		}
+		if strings.TrimSpace(c.Schema) == "" {
+			c.Schema = "dbo"
+		}
+		if strings.TrimSpace(c.SSLMode) == "" {
+			c.SSLMode = "disable"
+		}
+	default:
+		if c.Port == 0 {
+			c.Port = 3306
+		}
+		if strings.TrimSpace(c.Charset) == "" {
+			c.Charset = "utf8mb4"
+		}
+		// MySQL 使用数据库名作为 schema，单独的 schema 字段无意义
+		c.Schema = ""
 	}
-	timeout := c.TimeoutSeconds
-	if timeout <= 0 {
-		timeout = 10
-	}
-	// 用户名:密码@tcp(主机:端口)/数据库名?charset=utf8mb4&parseTime=True&loc=Local&timeout=10s
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&parseTime=True&loc=Local&timeout=%ds",
-		c.User, c.Password, c.Host, c.Port, c.Database, charset, timeout)
-}
-
-// Validate 校验数据库连接配置的合法性
-func (c *ConnectionConfig) Validate() error {
-	if strings.TrimSpace(c.ID) == "" {
-		return fmt.Errorf("连接 ID 不能为空")
-	}
-	if strings.TrimSpace(c.Host) == "" {
-		return fmt.Errorf("数据库主机不能为空")
-	}
-	if c.Port <= 0 || c.Port > 65535 {
-		return fmt.Errorf("数据库端口无效: %d", c.Port)
-	}
-	if strings.TrimSpace(c.User) == "" {
-		return fmt.Errorf("数据库用户名不能为空")
-	}
-	if strings.TrimSpace(c.Database) == "" {
-		return fmt.Errorf("数据库名称不能为空")
+	if c.TimeoutSeconds <= 0 {
+		c.TimeoutSeconds = 10
 	}
 	if c.Filter.MonitorMode == "" {
 		c.Filter.MonitorMode = "schema_and_data"
 	}
-	return nil
+}
+
+// EffectiveSchema 返回实际用于抓取的模式名
+func (c *ConnectionConfig) EffectiveSchema() string {
+	switch NormalizeVendor(c.Vendor) {
+	case VendorPostgres:
+		if c.Schema == "" {
+			return "public"
+		}
+		return c.Schema
+	case VendorSQLServer:
+		if c.Schema == "" {
+			return "dbo"
+		}
+		return c.Schema
+	default:
+		return c.Database
+	}
 }
 
 // ConnectionTestResult 数据库连通性测试结果
@@ -90,7 +119,7 @@ type ConnectionTestResult struct {
 	Success bool `json:"success"`
 	// Message 结果描述或错误信息
 	Message string `json:"message"`
-	// ServerVersion MySQL 服务端版本信息
+	// ServerVersion 服务端版本信息
 	ServerVersion string `json:"server_version"`
 	// LatencyMs 响应延迟毫秒数
 	LatencyMs int64 `json:"latency_ms"`

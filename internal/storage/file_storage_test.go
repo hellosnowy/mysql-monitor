@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"mysql-monitor/internal/model"
+	"sql-monitor/internal/model"
 )
 
 func TestFileStorage_Connections(t *testing.T) {
