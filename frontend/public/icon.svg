@@ -1,0 +1,394 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Background Gradients -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a1026" />
+      <stop offset="45%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    
+    <linearGradient id="borderGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.9" />
+      <stop offset="30%" stop-color="#2563eb" stop-opacity="0.6" />
+      <stop offset="70%" stop-color="#1e40af" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.8" />
+    </linearGradient>
+
+    <!-- Center Radial Glow -->
+    <radialGradient id="centerGlow" cx="50%" cy="48%" r="48%">
+      <stop offset="0%" stop-color="#0284c7" stop-opacity="0.32" />
+      <stop offset="40%" stop-color="#1e40af" stop-opacity="0.16" />
+      <stop offset="100%" stop-color="#0f172a" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Top Cap Gradient -->
+    <linearGradient id="topCapGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="40%" stop-color="#0ea5e9" />
+      <stop offset="85%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#0369a1" />
+    </linearGradient>
+
+    <!-- Cylinder Body Gradients (Realistic Lighting: Left dark, highlight center-left, right shadow) -->
+    <linearGradient id="tier1Body" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0369a1" />
+      <stop offset="15%" stop-color="#0284c7" />
+      <stop offset="40%" stop-color="#38bdf8" />
+      <stop offset="70%" stop-color="#0284c7" />
+      <stop offset="90%" stop-color="#0369a1" />
+      <stop offset="100%" stop-color="#075985" />
+    </linearGradient>
+
+    <linearGradient id="tier2Body" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1e3a8a" />
+      <stop offset="15%" stop-color="#1e40af" />
+      <stop offset="40%" stop-color="#3b82f6" />
+      <stop offset="70%" stop-color="#2563eb" />
+      <stop offset="90%" stop-color="#1d4ed8" />
+      <stop offset="100%" stop-color="#172554" />
+    </linearGradient>
+
+    <linearGradient id="tier3Body" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#172554" />
+      <stop offset="15%" stop-color="#1e3a8a" />
+      <stop offset="40%" stop-color="#2563eb" />
+      <stop offset="70%" stop-color="#1d4ed8" />
+      <stop offset="90%" stop-color="#1e3a8a" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+
+    <!-- Specular Highlight Strip -->
+    <linearGradient id="specularGleam" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0" />
+      <stop offset="35%" stop-color="#ffffff" stop-opacity="0.1" />
+      <stop offset="42%" stop-color="#ffffff" stop-opacity="0.45" />
+      <stop offset="48%" stop-color="#ffffff" stop-opacity="0.1" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Pulse Line Gradient -->
+    <linearGradient id="pulseGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#10b981" stop-opacity="0.3" />
+      <stop offset="18%" stop-color="#10b981" />
+      <stop offset="38%" stop-color="#22d3ee" />
+      <stop offset="50%" stop-color="#ffffff" />
+      <stop offset="62%" stop-color="#22d3ee" />
+      <stop offset="82%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.3" />
+    </linearGradient>
+
+    <!-- Filters for Glow & Shadows -->
+    <filter id="pulseGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8" result="blur1" />
+      <feGaussianBlur stdDeviation="18" result="blur2" />
+      <feMerge>
+        <feMergeNode in="blur2" />
+        <feMergeNode in="blur1" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="ledGlowGreen" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="ledGlowCyan" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="dropShadowSquircle" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="28" stdDeviation="36" flood-color="#000000" flood-opacity="0.6" />
+    </filter>
+
+    <filter id="cylinderShadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000000" flood-opacity="0.5" />
+    </filter>
+  </defs>
+
+  <!-- Background Squircle Card -->
+  <rect x="64" y="64" width="896" height="896" rx="220" ry="220" 
+        fill="url(#bgGrad)" 
+        stroke="url(#borderGlow)" 
+        stroke-width="8" 
+        filter="url(#dropShadowSquircle)" />
+
+  <!-- Inner Ambient Glow Behind Database -->
+  <circle cx="512" cy="512" r="400" fill="url(#centerGlow)" />
+
+  <!-- Corner Tech Accent Dots (Subtle) -->
+  <g opacity="0.15" fill="#93c5fd">
+    <circle cx="170" cy="170" r="3.5" />
+    <circle cx="210" cy="170" r="3.5" />
+    <circle cx="250" cy="170" r="3.5" />
+    <circle cx="170" cy="210" r="3.5" />
+    <circle cx="210" cy="210" r="3.5" />
+    <circle cx="250" cy="210" r="3.5" />
+    
+    <circle cx="774" cy="170" r="3.5" />
+    <circle cx="814" cy="170" r="3.5" />
+    <circle cx="854" cy="170" r="3.5" />
+    <circle cx="774" cy="210" r="3.5" />
+    <circle cx="814" cy="210" r="3.5" />
+    <circle cx="854" cy="210" r="3.5" />
+
+    <circle cx="170" cy="814" r="3.5" />
+    <circle cx="210" cy="814" r="3.5" />
+    <circle cx="250" cy="814" r="3.5" />
+    <circle cx="170" cy="854" r="3.5" />
+    <circle cx="210" cy="854" r="3.5" />
+    <circle cx="250" cy="854" r="3.5" />
+
+    <circle cx="774" cy="814" r="3.5" />
+    <circle cx="814" cy="814" r="3.5" />
+    <circle cx="854" cy="814" r="3.5" />
+    <circle cx="774" cy="854" r="3.5" />
+    <circle cx="814" cy="854" r="3.5" />
+    <circle cx="854" cy="854" r="3.5" />
+  </g>
+
+  <!-- ================= DATABASE CYLINDER STACK ================= -->
+  <!-- 
+       Centered vertically and horizontally
+       Center X: 512
+       Radius X: 275
+       Radius Y: 76
+       Width = 550 (x: 237 to 787)
+       Disk Height = 100
+       Gap = 35
+       
+       Tier 3 (Bottom):
+         Top ellipse: Y = 620
+         Body: 620 to 720
+       
+       Tier 2 (Middle):
+         Top ellipse: Y = 475
+         Body: 475 to 575
+         
+       Tier 1 (Top):
+         Top ellipse: Y = 330
+         Body: 330 to 430
+  -->
+
+  <!-- ===== TIER 3 (BOTTOM DISK) ===== -->
+  <g id="tier-3" filter="url(#cylinderShadow)">
+    <!-- Top Cap of Tier 3 -->
+    <ellipse cx="512" cy="620" rx="275" ry="76" fill="#0f172a" />
+    <ellipse cx="512" cy="620" rx="273" ry="74" fill="#172554" stroke="#1e3a8a" stroke-width="2" />
+
+    <!-- Body -->
+    <path d="M 237,620
+             L 237,725
+             A 275,76 0 0,0 787,725
+             L 787,620
+             A 275,76 0 0,1 237,620 Z"
+          fill="url(#tier3Body)" />
+    
+    <!-- Bottom Rim Highlight Stroke -->
+    <path d="M 237,725 A 275,76 0 0,0 787,725" 
+          fill="none" stroke="#3b82f6" stroke-width="3.5" opacity="0.65" />
+
+    <!-- Specular gleam on body -->
+    <path d="M 237,620 L 237,725 A 275,76 0 0,0 787,725 L 787,620 A 275,76 0 0,1 237,620 Z"
+          fill="url(#specularGleam)" opacity="0.5" />
+
+    <!-- Server Rack Slots & LED Indicators -->
+    <rect x="280" y="668" width="76" height="15" rx="7.5" fill="#0a0f1d" opacity="0.75" />
+    <circle cx="294" cy="675.5" r="4" fill="#38bdf8" filter="url(#ledGlowCyan)" />
+    <circle cx="311" cy="675.5" r="4" fill="#10b981" filter="url(#ledGlowGreen)" />
+    <circle cx="328" cy="675.5" r="4" fill="#60a5fa" opacity="0.8" />
+    <circle cx="345" cy="675.5" r="3" fill="#1e3a8a" />
+    
+    <!-- Right Data Channel Slot -->
+    <g transform="translate(685, 668)">
+      <rect x="0" y="0" width="56" height="15" rx="7.5" fill="#0a0f1d" opacity="0.75" />
+      <rect x="7" y="4" width="18" height="7" rx="3.5" fill="#38bdf8" opacity="0.8" />
+      <rect x="31" y="4" width="18" height="7" rx="3.5" fill="#10b981" opacity="0.9" />
+    </g>
+  </g>
+
+  <!-- ===== TIER 2 (MIDDLE DISK) ===== -->
+  <g id="tier-2" filter="url(#cylinderShadow)">
+    <!-- Top Cap of Tier 2 -->
+    <ellipse cx="512" cy="475" rx="275" ry="76" fill="#0f172a" />
+    <ellipse cx="512" cy="475" rx="273" ry="74" fill="#1e3a8a" stroke="#2563eb" stroke-width="2" />
+    
+    <!-- Body -->
+    <path d="M 237,475
+             L 237,580
+             A 275,76 0 0,0 787,580
+             L 787,475
+             A 275,76 0 0,1 237,475 Z"
+          fill="url(#tier2Body)" />
+
+    <!-- Rim Highlight Stroke -->
+    <path d="M 237,580 A 275,76 0 0,0 787,580" 
+          fill="none" stroke="#60a5fa" stroke-width="3.5" opacity="0.75" />
+
+    <!-- Specular gleam on body -->
+    <path d="M 237,475 L 237,580 A 275,76 0 0,0 787,580 L 787,475 A 275,76 0 0,1 237,475 Z"
+          fill="url(#specularGleam)" opacity="0.6" />
+
+    <!-- Server Rack Slots & LED Indicators -->
+    <rect x="280" y="523" width="76" height="15" rx="7.5" fill="#0a0f1d" opacity="0.75" />
+    <circle cx="294" cy="530.5" r="4" fill="#10b981" filter="url(#ledGlowGreen)" />
+    <circle cx="311" cy="530.5" r="4" fill="#34d399" filter="url(#ledGlowGreen)" />
+    <circle cx="328" cy="530.5" r="4" fill="#22d3ee" filter="url(#ledGlowCyan)" />
+    <circle cx="345" cy="530.5" r="3" fill="#1e40af" />
+
+    <!-- Right Status Bar -->
+    <g transform="translate(685, 523)">
+      <rect x="0" y="0" width="56" height="15" rx="7.5" fill="#0a0f1d" opacity="0.75" />
+      <circle cx="13" cy="7.5" r="3.5" fill="#10b981" filter="url(#ledGlowGreen)" />
+      <line x1="24" y1="7.5" x2="46" y2="7.5" stroke="#38bdf8" stroke-width="3.5" stroke-linecap="round" />
+    </g>
+  </g>
+
+  <!-- ===== TIER 1 (TOP DISK) ===== -->
+  <g id="tier-1" filter="url(#cylinderShadow)">
+    <!-- Top Cap visible rim shadow -->
+    <ellipse cx="512" cy="330" rx="275" ry="76" fill="#0284c7" stroke="#38bdf8" stroke-width="2" />
+    
+    <!-- Body -->
+    <path d="M 237,330
+             L 237,435
+             A 275,76 0 0,0 787,435
+             L 787,330
+             A 275,76 0 0,1 237,330 Z"
+          fill="url(#tier1Body)" />
+
+    <!-- Rim Highlight Stroke -->
+    <path d="M 237,435 A 275,76 0 0,0 787,435" 
+          fill="none" stroke="#bae6fd" stroke-width="4" opacity="0.85" />
+
+    <!-- Specular gleam on body -->
+    <path d="M 237,330 L 237,435 A 275,76 0 0,0 787,435 L 787,330 A 275,76 0 0,1 237,330 Z"
+          fill="url(#specularGleam)" opacity="0.7" />
+
+    <!-- Top Cap Platter Face -->
+    <ellipse cx="512" cy="330" rx="273" ry="74" fill="url(#topCapGrad)" />
+    
+    <!-- Concentric Data Rings (Precision Platter Look) -->
+    <ellipse cx="512" cy="330" rx="215" ry="58" 
+             fill="none" stroke="#7dd3fc" stroke-width="3" opacity="0.65" />
+    <ellipse cx="512" cy="330" rx="145" ry="39" 
+             fill="none" stroke="#bae6fd" stroke-width="2.5" opacity="0.5" />
+    
+    <!-- Center Core Spindle (High-Tech Glowing Hub) -->
+    <ellipse cx="512" cy="330" rx="60" ry="17" fill="#0a0f1d" />
+    <ellipse cx="512" cy="330" rx="46" ry="13" fill="#0284c7" />
+    <ellipse cx="512" cy="330" rx="26" ry="7.5" fill="#38bdf8" filter="url(#ledGlowCyan)" />
+    <circle cx="512" cy="330" r="3" fill="#ffffff" />
+
+    <!-- Top Cap Specular Arc / Glass Sheen -->
+    <path d="M 268,330 A 248,65 0 0,1 756,330 A 273,74 0 0,0 268,330 Z" 
+          fill="#ffffff" opacity="0.32" />
+
+    <!-- Server Rack Slots & LED Indicators on Tier 1 -->
+    <rect x="280" y="378" width="76" height="15" rx="7.5" fill="#082f49" opacity="0.8" />
+    <circle cx="294" cy="385.5" r="4" fill="#38bdf8" filter="url(#ledGlowCyan)" />
+    <circle cx="311" cy="385.5" r="4" fill="#22d3ee" filter="url(#ledGlowCyan)" />
+    <circle cx="328" cy="385.5" r="4" fill="#34d399" filter="url(#ledGlowGreen)" />
+    <circle cx="345" cy="385.5" r="3" fill="#38bdf8" />
+
+    <!-- Right Status Bar on Tier 1 -->
+    <g transform="translate(685, 378)">
+      <rect x="0" y="0" width="56" height="15" rx="7.5" fill="#082f49" opacity="0.8" />
+      <line x1="10" y1="7.5" x2="30" y2="7.5" stroke="#38bdf8" stroke-width="3.5" stroke-linecap="round" />
+      <circle cx="43" cy="7.5" r="3.5" fill="#34d399" filter="url(#ledGlowGreen)" />
+    </g>
+  </g>
+
+  <!-- ================= MONITORING PULSE & TELEMETRY WAVE ================= -->
+  <!-- 
+       A bold, clean, luminous ECG / telemetry heartbeat monitor wave
+       passing cleanly across the middle cylinder.
+       Instant recognition at any scale: database + live monitoring!
+  -->
+  <g id="monitor-pulse">
+    <!-- Ambient Halo Glow -->
+    <path d="M 130,555 
+             L 320,555 
+             L 365,525 
+             L 405,600 
+             L 455,395 
+             L 512,680 
+             L 570,470 
+             L 610,580 
+             L 650,540 
+             L 690,555 
+             L 894,555"
+          fill="none" 
+          stroke="#06b6d4" 
+          stroke-width="32" 
+          stroke-linecap="round" 
+          stroke-linejoin="round" 
+          opacity="0.35" 
+          filter="url(#pulseGlow)" />
+
+    <!-- Secondary Neon Glow -->
+    <path d="M 130,555 
+             L 320,555 
+             L 365,525 
+             L 405,600 
+             L 455,395 
+             L 512,680 
+             L 570,470 
+             L 610,580 
+             L 650,540 
+             L 690,555 
+             L 894,555"
+          fill="none" 
+          stroke="url(#pulseGrad)" 
+          stroke-width="15" 
+          stroke-linecap="round" 
+          stroke-linejoin="round" 
+          filter="url(#pulseGlow)" />
+
+    <!-- Pure Core White Line -->
+    <path d="M 140,555 
+             L 320,555 
+             L 365,525 
+             L 405,600 
+             L 455,395 
+             L 512,680 
+             L 570,470 
+             L 610,580 
+             L 650,540 
+             L 690,555 
+             L 884,555"
+          fill="none" 
+          stroke="#ffffff" 
+          stroke-width="5" 
+          stroke-linecap="round" 
+          stroke-linejoin="round" />
+
+    <!-- Telemetry Pulse Target Nodes -->
+    <!-- Peak 1 (High Peak) -->
+    <circle cx="455" cy="395" r="16" fill="#22d3ee" opacity="0.45" filter="url(#pulseGlow)" />
+    <circle cx="455" cy="395" r="8.5" fill="#ffffff" />
+    <circle cx="455" cy="395" r="4.5" fill="#0891b2" />
+
+    <!-- Dip Node (Deep Valley) -->
+    <circle cx="512" cy="680" r="16" fill="#10b981" opacity="0.45" filter="url(#pulseGlow)" />
+    <circle cx="512" cy="680" r="8.5" fill="#ffffff" />
+    <circle cx="512" cy="680" r="4.5" fill="#059669" />
+
+    <!-- Peak 2 (Recovery Peak) -->
+    <circle cx="570" cy="470" r="15" fill="#38bdf8" opacity="0.45" filter="url(#pulseGlow)" />
+    <circle cx="570" cy="470" r="7.5" fill="#ffffff" />
+    <circle cx="570" cy="470" r="4" fill="#0284c7" />
+
+    <!-- Outer Ping Terminals -->
+    <circle cx="130" cy="555" r="6" fill="#34d399" filter="url(#ledGlowGreen)" />
+    <circle cx="894" cy="555" r="6" fill="#38bdf8" filter="url(#ledGlowCyan)" />
+  </g>
+
+</svg>

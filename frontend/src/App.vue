@@ -3,7 +3,7 @@
     <!-- 顶部导航栏 -->
     <header class="app-header">
       <div class="header-brand">
-        <div class="logo-icon">🗄️</div>
+        <img class="logo-image" src="/icon.svg" alt="SQL Monitor" />
         <div class="brand-text">
           <h1>SQL Monitor</h1>
           <span class="sub-title">多数据库 DDL & DML 监控与版本比对工具</span>
@@ -970,8 +970,13 @@ onMounted(() => {
   gap: 12px;
 }
 
-.logo-icon {
-  font-size: 28px;
+.logo-image {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  object-fit: contain;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+  flex-shrink: 0;
 }
 
 .brand-text h1 {

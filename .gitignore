@@ -1,6 +1,6 @@
 # Binaries
 bin/
-build/
+build/bin/
 *.exe
 *.exe~
 *.dll
