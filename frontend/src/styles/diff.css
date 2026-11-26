@@ -1,0 +1,294 @@
+/* 历史版本差异比对与 SQL 查看器页面专用样式 */
+.diff-control-panel {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.control-col {
+  flex: 1 1 180px;
+  min-width: 170px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.control-col.direction-col {
+  flex: 0 0 auto;
+  min-width: 250px;
+}
+
+.control-action {
+  flex: 0 0 auto;
+}
+
+.control-col label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.diff-arrow {
+  font-size: 20px;
+  color: var(--text-muted);
+  padding-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.btn-diff {
+  height: 38px;
+  padding: 0 20px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 方向切换控件 */
+.direction-toggle {
+  display: flex;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 3px;
+  gap: 6px;
+}
+
+.direction-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 7px 12px;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #64748b;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+
+.direction-btn:hover:not(.active) {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+
+.direction-checkbox {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid #94a3b8;
+  background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.18s ease;
+  flex-shrink: 0;
+}
+
+.direction-btn:hover:not(.active) .direction-checkbox {
+  border-color: #64748b;
+}
+
+.check-icon {
+  width: 11px;
+  height: 11px;
+  fill: currentColor;
+}
+
+.direction-btn.direction-upgrade.active {
+  background: #eff6ff;
+  border-color: var(--primary);
+  color: #1d4ed8;
+  font-weight: 600;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2), 0 2px 6px rgba(37, 99, 235, 0.15);
+  transform: translateY(-1px);
+}
+
+.direction-btn.direction-upgrade.active .direction-checkbox.checked {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.35);
+}
+
+.direction-btn.direction-rollback.active {
+  background: #fffbeb;
+  border-color: #d97706;
+  color: #b45309;
+  font-weight: 600;
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.25), 0 2px 6px rgba(217, 119, 6, 0.15);
+  transform: translateY(-1px);
+}
+
+.direction-btn.direction-rollback.active .direction-checkbox.checked {
+  background: #d97706;
+  border-color: #d97706;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(217, 119, 6, 0.35);
+}
+
+/* 比对结果与统计卡片 */
+.diff-result-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.stat-icon {
+  font-size: 32px;
+}
+
+.stat-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.stat-numbers {
+  display: flex;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.stat-tag {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.stat-tag.add {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.stat-tag.mod {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.stat-tag.del {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.stat-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* SQL 代码展示卡片 */
+.sql-viewer-card {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.sql-viewer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.script-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
+.script-tab {
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.script-tab.active {
+  background: #ffffff;
+  color: var(--primary);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.script-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+}
+
+/* 历史比对框：严格禁止编辑，支持自由选择高亮与复制 */
+.sql-code-container {
+  padding: 16px;
+  max-height: 480px;
+  overflow-y: auto;
+  background: #1e293b;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.sql-code {
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.sql-code code {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.sql-code ::selection,
+.sql-code code::selection {
+  background-color: #2563eb;
+  color: #ffffff;
+}

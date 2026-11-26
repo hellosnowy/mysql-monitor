@@ -1,6 +1,6 @@
 # SQL Monitor (多数据库 DDL & DML 监控与版本比对工具)
 
-基于 **Golang** 与 **Wails v2** 构建的跨平台桌面应用，用于监控 **MySQL、PostgreSQL、SQL Server** 数据库结构 (DDL) 与数据 (DML) 变动、捕获历史版本基线 (Baseline)，并支持在任意两个历史版本之间生成 **升级** 或 **回滚** SQL 脚本。
+基于 **Golang** 与 **Wails v3** 构建的跨平台桌面应用，用于监控 **MySQL、PostgreSQL、SQL Server** 数据库结构 (DDL) 与数据 (DML) 变动、捕获历史版本基线 (Baseline)，并支持在任意两个历史版本之间生成 **升级** 或 **回滚** SQL 脚本。
 
 ---
 
@@ -56,9 +56,10 @@
 
 ```
 sql-monitor/
-├── main.go                       # Wails 桌面应用入口（嵌入前端 dist）
-├── app.go                        # Wails 前后端桥接服务
-├── wails.json                    # Wails 项目配置
+├── main.go                       # Wails v3 桌面应用入口（嵌入前端 dist）
+├── app.go                        # Wails v3 前后端桥接服务（Service）
+├── Taskfile.yml                  # Wails v3 构建任务配置
+├── build/                        # Wails v3 构建配置（config.yml）与各平台打包资产
 ├── internal/
 │   ├── model/                    # 领域模型 + 老版本数据归一化
 │   ├── sqlgen/                   # 方言 SQL 发射接口
@@ -78,8 +79,14 @@ sql-monitor/
 │   └── sqlutil/                  # MySQL 转义/字面量工具
 └── frontend/                     # Vue 3 + Vite
     └── src/
-        ├── App.vue               # 连接 / 快照 / 比对界面
-        └── api.js                # Wails 调用封装（含浏览器 Mock）
+        ├── App.vue               # 主应用壳与四模块导航切换
+        ├── style.css             # 全局基础样式入口
+        ├── api/                  # 按领域拆分的 Wails 桥接 API（含浏览器 Mock）
+        ├── components/           # 顶部导航、消息提示与业务弹窗组件
+        ├── composables/          # 响应式组合函数（Toast 等）
+        ├── styles/               # 令牌、布局、通用组件与各页面专用样式
+        ├── utils/                # 格式化与方言默认值工具
+        └── views/                # 首页、连接管理、快照版本、差异比对视图
 ```
 
 ---
@@ -87,9 +94,9 @@ sql-monitor/
 ## 构建与运行
 
 ### 1. 前提环境
-- Go 1.25+
+- Go 1.26+
 - Node.js 18+ 与 npm
-- （可选）Wails CLI：`go install github.com/wailsapp/wails/v2/cmd/wails@latest`
+- （可选）Wails v3 CLI：`go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0`
 
 ### 2. 本地开发
 ```bash
@@ -98,14 +105,19 @@ npm install
 npm run dev
 ```
 
-或使用 Wails 开发模式（前后端热重载）：
+或使用 Wails v3 开发模式（前后端热重载）：
 ```bash
-wails dev
+wails3 dev
+```
+
+重新生成前端 JS 绑定：
+```bash
+wails3 generate bindings -clean=true
 ```
 
 ### 3. 编译打包
 ```bash
-wails build
+wails3 build
 ```
 
 或使用标准 Go 工具链（必须指定 `-tags "production"`）：

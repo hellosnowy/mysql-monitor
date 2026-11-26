@@ -6,6 +6,7 @@ build/bin/
 *.dll
 *.so
 *.dylib
+*.syso
 
 # Test artifacts
 *.test
@@ -19,7 +20,8 @@ frontend/node_modules/
 frontend/dist/
 .vite/
 
-# IDE / OS
+# IDE / OS / Task cache
+.task/
 .idea/
 .vscode/
 *.swp

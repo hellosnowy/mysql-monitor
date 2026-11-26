@@ -4,45 +4,56 @@ import (
 	"embed"
 	"log"
 
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/options/windows"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
 
+//go:embed build/appicon.png
+var appIcon []byte
+
 func main() {
 	// 初始化后端核心桥接服务
-	app, err := NewApp()
+	appService, err := NewApp()
 	if err != nil {
 		log.Fatalf("初始化应用服务失败: %v", err)
 	}
 
-	// 运行 Wails 原生桌面应用
-	err = wails.Run(&options.App{
-		Title:     "SQL Monitor - 多数据库 DDL & DML 监控比对工具",
-		Width:     1280,
-		Height:    820,
-		MinWidth:  1024,
-		MinHeight: 680,
-		AssetServer: &assetserver.Options{
-			Assets: assets,
+	// 创建 Wails v3 桌面应用实例
+	wailsApp := application.New(application.Options{
+		Name:        "SQL Monitor",
+		Description: "Multi-database (MySQL, PostgreSQL, SQL Server) DDL and DML Monitor and Diff Tool",
+		Icon:        appIcon,
+		Services: []application.Service{
+			application.NewService(appService),
 		},
-		BackgroundColour: &options.RGBA{R: 248, G: 250, B: 252, A: 1},
-		OnStartup:        app.startup,
-		Bind: []interface{}{
-			app,
+		Assets: application.AssetOptions{
+			Handler: application.AssetFileServerFS(assets),
 		},
-		Windows: &windows.Options{
-			WebviewIsTransparent: false,
-			WindowIsTranslucent:  false,
-			BackdropType:         windows.Mica,
+		Mac: application.MacOptions{
+			ApplicationShouldTerminateAfterLastWindowClosed: true,
+		},
+	})
+	appService.setApplication(wailsApp)
+
+	// 创建主应用窗口（保持与 v2 一致的尺寸、背景色与 Windows Mica 效果）
+	wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title:            "SQL Monitor - 多数据库 DDL & DML 监控比对工具",
+		Width:            1280,
+		Height:           820,
+		MinWidth:         1024,
+		MinHeight:        680,
+		BackgroundType:   application.BackgroundTypeSolid,
+		BackgroundColour: application.NewRGB(248, 250, 252),
+		URL:              "/",
+		Windows: application.WindowsWindow{
+			BackdropType: application.Mica,
 		},
 	})
 
-	if err != nil {
+	// 运行 Wails 原生桌面应用
+	if err := wailsApp.Run(); err != nil {
 		log.Fatalf("启动桌面应用失败: %v", err)
 	}
 }
