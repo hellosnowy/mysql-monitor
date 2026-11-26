@@ -25,3 +25,4 @@ frontend/dist/
 *.swp
 *~
 Thumbs.db
+.task/
